@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Traffic Log Pro - 時間微調紀錄版</title>
+    <style>
+        :root {
+            --bg: #000000;
+            --card-bg: #111111;
+            --red: #ff3b30;
+            --green: #4cd964;
+            --yellow: #ffcc00;
+            --text: #ffffff;
+            --text-dim: #555555;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 10px;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        /* 1. 頂部時鐘 */
+        .header {
+            height: 10%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        #clock { font-size: 2rem; font-weight: 800; font-family: monospace; color: var(--text); }
+
+        /* 2. 紀錄列表區 */
+        .log-container {
+            flex: 1;
+            overflow-y: auto;
+            margin: 10px 0;
+            padding: 5px;
+            background: var(--card-bg);
+            border-radius: 15px;
+            border: 1px solid #222;
+        }
+
+        .log-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #222;
+            font-family: monospace;
+            font-size: 1.1rem;
+            display: flex;
+            justify-content: space-between;
+            transition: 0.3s;
+        }
+
+        /* 高亮最後一筆紀錄 */
+        .log-item.latest {
+            background: #1a1a1a;
+            border-left: 4px solid var(--yellow);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { border-left-color: var(--yellow); }
+            50% { border-left-color: transparent; }
+            100% { border-left-color: var(--yellow); }
+        }
+
+        .log-no { color: var(--text-dim); margin-right: 10px; }
+        .red-text { color: var(--red); font-weight: bold; }
+        .green-text { color: var(--green); font-weight: bold; }
+
+        /* 3. 時間微調控制區 */
+        .adjustment-panel {
+            background: #151515;
+            padding: 15px;
+            border-radius: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border: 1px solid #333;
+        }
+
+        .adj-btn {
+            background: #333;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .adj-btn:active { background: var(--yellow); color: black; }
+        .adj-label { text-align: center; font-size: 0.8rem; color: #888; }
+
+        /* 4. 底部主按鈕 */
+        .footer {
+            height: 20%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            padding-bottom: env(safe-area-inset-bottom, 10px);
+        }
+
+        .main-btn {
+            border: none;
+            border-radius: 20px;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .main-btn:active { transform: scale(0.95); }
+        .btn-red { background: linear-gradient(135deg, #d32f2f, #f44336); }
+        .btn-green { background: linear-gradient(135deg, #388e3c, #4caf50); }
+
+        .clear-link { text-align: center; font-size: 0.7rem; color: #333; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div id="clock">00:00:00</div>
+    </div>
+
+    <div class="log-container" id="log-list">
+        <!-- 紀錄動態插入 -->
+    </div>
+
+    <!-- 時間微調控制區 -->
+    <div class="adj-label">微調最後一筆紀錄的時間</div>
+    <div class="adjustment-panel">
+        <button class="adj-btn" onclick="adjustTime(-1)">- 1s</button>
+        <div style="text-align: center;">
+            <div style="color: var(--yellow); font-weight: bold;">TIME ADJ</div>
+            <div style="font-size: 0.7rem; color: #666;">秒數修正</div>
+        </div>
+        <button class="adj-btn" onclick="adjustTime(1)">+ 1s</button>
+    </div>
+
+    <div class="footer">
+        <button class="main-btn btn-red" onclick="addRecord('red')">🔴 紅燈</button>
+        <button class="main-btn btn-green" onclick="addRecord('green')">🟢 綠燈</button>
+    </div>
+
+    <div class="clear-link" onclick="confirmClear()">長按清除所有資料</div>
+
+    <audio id="beep" src="https://actions.google.com/sounds/v1/ui/beep_short.ogg"></audio>
+
+<script>
+    let records = JSON.parse(localStorage.getItem('traffic_data_v6')) || [];
+    let wakeLock = null;
+
+    // 更新時鐘
+    function updateClock() {
+        document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+    }
+    setInterval(updateClock, 1000); updateClock();
+
+    // 螢幕常亮
+    async function initWake() {
+        try { if('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+    }
+    initWake();
+
+    // 渲染清單
+    function renderLogs() {
+        const list = document.getElementById('log-list');
+        list.innerHTML = '';
+        records.forEach((rec, index) => {
+            const isLatest = (index === records.length - 1);
+            const timeStr = new Date(rec.timestamp).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const div = document.createElement('div');
+            div.className = `log-item ${isLatest ? 'latest' : ''}`;
+            const colorClass = rec.type === 'red' ? 'red-text' : 'green-text';
+            const label = rec.type === 'red' ? '紅燈亮' : '綠燈亮';
+
+            div.innerHTML = `
+                <span><span class="log-no">#${index + 1}</span><span class="${colorClass}">${label}</span></span>
+                <span class="${colorClass}">${timeStr}</span>
+            `;
+            list.appendChild(div);
+        });
+        list.scrollTop = list.scrollHeight;
+    }
+
+    // 新增紀錄
+    function addRecord(type) {
+        const newRecord = {
+            type: type,
+            timestamp: Date.now()
+        };
+        records.push(newRecord);
+        saveAndRefresh();
+        
+        // 反饋
+        if (navigator.vibrate) navigator.vibrate(50);
+        document.getElementById('beep').play().catch(()=>{});
+    }
+
+    // 修改時間 (秒)
+    function adjustTime(sec) {
+        if (records.length === 0) return;
+        
+        // 修改最後一筆的時間戳 (加上正負秒數 * 1000 毫秒)
+        const lastIdx = records.length - 1;
+        records[lastIdx].timestamp += (sec * 1000);
+        
+        saveAndRefresh();
+        
+        // 微調震動反饋
+        if (navigator.vibrate) navigator.vibrate(30);
+    }
+
+    function saveAndRefresh() {
+        localStorage.setItem('traffic_data_v6', JSON.stringify(records));
+        renderLogs();
+    }
+
+    function confirmClear() {
+        if(confirm("確定要刪除所有紀錄並重置嗎？")) {
+            records = [];
+            saveAndRefresh();
+        }
+    }
+
+    // 初始化讀取
+    renderLogs();
+</script>
+</body>
+</html>
