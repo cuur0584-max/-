@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Traffic Log Pro - 時間微調紀錄版</title>
+    <title>Traffic Log V10 - 永久編號統計版</title>
     <style>
         :root {
             --bg: #000000;
@@ -11,8 +11,11 @@
             --red: #ff3b30;
             --green: #4cd964;
             --yellow: #ffcc00;
+            --blue: #007aff;
+            --purple: #af52de;
             --text: #ffffff;
             --text-dim: #555555;
+            --selected-bg: #1a1a00;
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -25,21 +28,21 @@
             height: 100dvh;
             display: flex;
             flex-direction: column;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, system-ui, sans-serif;
             overflow: hidden;
         }
 
-        /* 1. 頂部時鐘 */
         .header {
-            height: 10%;
+            height: 12%;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            border-bottom: 1px solid #222;
         }
-        #clock { font-size: 2rem; font-weight: 800; font-family: monospace; color: var(--text); }
+        #clock { font-size: 2rem; font-weight: 800; font-family: monospace; margin: 0; }
+        #total-stats { font-size: 0.8rem; color: var(--blue); margin-top: 4px; font-weight: bold; }
 
-        /* 2. 紀錄列表區 */
         .log-container {
             flex: 1;
             overflow-y: auto;
@@ -47,63 +50,65 @@
             padding: 5px;
             background: var(--card-bg);
             border-radius: 15px;
-            border: 1px solid #222;
         }
 
         .log-item {
-            padding: 10px 15px;
+            padding: 12px 15px;
             border-bottom: 1px solid #222;
             font-family: monospace;
             font-size: 1.1rem;
             display: flex;
-            justify-content: space-between;
-            transition: 0.3s;
+            flex-direction: column;
+            transition: 0.2s;
+            border-left: 4px solid transparent;
         }
 
-        /* 高亮最後一筆紀錄 */
-        .log-item.latest {
-            background: #1a1a1a;
+        .log-item.selected {
+            background: var(--selected-bg);
             border-left: 4px solid var(--yellow);
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { border-left-color: var(--yellow); }
-            50% { border-left-color: transparent; }
-            100% { border-left-color: var(--yellow); }
         }
 
-        .log-no { color: var(--text-dim); margin-right: 10px; }
+        .log-row { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .log-no { color: var(--text-dim); margin-right: 10px; font-size: 0.85rem; font-weight: bold; }
+        .log-name { color: var(--yellow); font-size: 0.9rem; margin-top: 4px; font-weight: normal; }
         .red-text { color: var(--red); font-weight: bold; }
         .green-text { color: var(--green); font-weight: bold; }
 
-        /* 3. 時間微調控制區 */
-        .adjustment-panel {
+        /* 控制面板 */
+        .control-panel {
             background: #151515;
-            padding: 15px;
+            padding: 8px;
             border-radius: 20px;
-            margin-bottom: 15px;
-            display: flex;
-            justify-content: space-around;
+            margin-bottom: 10px;
+            display: grid;
+            grid-template-columns: 0.8fr 0.8fr 1.2fr 0.8fr 0.8fr; 
+            gap: 5px;
             align-items: center;
             border: 1px solid #333;
         }
 
-        .adj-btn {
-            background: #333;
-            color: white;
+        .ctrl-btn {
+            background: #222;
+            color: #ccc;
             border: none;
-            padding: 12px 25px;
+            padding: 12px 2px;
             border-radius: 12px;
-            font-size: 1.2rem;
+            font-size: 0.8rem;
             font-weight: bold;
             cursor: pointer;
+            text-align: center;
         }
-        .adj-btn:active { background: var(--yellow); color: black; }
-        .adj-label { text-align: center; font-size: 0.8rem; color: #888; }
+        .ctrl-btn:active { background: #444; }
+        .btn-mic { color: var(--purple); border: 1px solid var(--purple); }
+        .mic-active { animation: mic-pulse 1.5s infinite; background: var(--purple) !important; color: white !important; }
+        @keyframes mic-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(175, 82, 222, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(175, 82, 222, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(175, 82, 222, 0); }
+        }
 
-        /* 4. 底部主按鈕 */
         .footer {
-            height: 20%;
+            height: 18%;
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 15px;
@@ -118,33 +123,30 @@
             font-weight: bold;
             cursor: pointer;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         .main-btn:active { transform: scale(0.95); }
         .btn-red { background: linear-gradient(135deg, #d32f2f, #f44336); }
         .btn-green { background: linear-gradient(135deg, #388e3c, #4caf50); }
-
-        .clear-link { text-align: center; font-size: 0.7rem; color: #333; margin-top: 5px; }
     </style>
 </head>
 <body>
 
     <div class="header">
         <div id="clock">00:00:00</div>
+        <div id="total-stats">目前累計總數: <span id="global-count">0</span> 次</div>
     </div>
 
-    <div class="log-container" id="log-list">
-        <!-- 紀錄動態插入 -->
-    </div>
+    <div class="log-container" id="log-list"></div>
 
-    <!-- 時間微調控制區 -->
-    <div class="adj-label">微調最後一筆紀錄的時間</div>
-    <div class="adjustment-panel">
-        <button class="adj-btn" onclick="adjustTime(-1)">- 1s</button>
-        <div style="text-align: center;">
-            <div style="color: var(--yellow); font-weight: bold;">TIME ADJ</div>
-            <div style="font-size: 0.7rem; color: #666;">秒數修正</div>
-        </div>
-        <button class="adj-btn" onclick="adjustTime(1)">+ 1s</button>
+    <div class="control-panel">
+        <button class="ctrl-btn" onclick="adjustTime(-1)">-1s</button>
+        <button class="ctrl-btn" onclick="adjustTime(1)">+1s</button>
+        <button id="mic-btn" class="ctrl-btn btn-mic" onclick="startVoiceNaming()">🎙 命名</button>
+        <button class="ctrl-btn" onclick="exportData()">📤 匯出</button>
+        <button class="ctrl-btn" style="color:var(--red)" onclick="deleteSelected()">🗑 刪除</button>
     </div>
 
     <div class="footer">
@@ -152,89 +154,122 @@
         <button class="main-btn btn-green" onclick="addRecord('green')">🟢 綠燈</button>
     </div>
 
-    <div class="clear-link" onclick="confirmClear()">長按清除所有資料</div>
-
-    <audio id="beep" src="https://actions.google.com/sounds/v1/ui/beep_short.ogg"></audio>
+    <audio id="beep-sound" src="https://actions.google.com/sounds/v1/ui/beep_short.ogg"></audio>
 
 <script>
-    let records = JSON.parse(localStorage.getItem('traffic_data_v6')) || [];
-    let wakeLock = null;
+    // 讀取現有紀錄與全局編號
+    let records = JSON.parse(localStorage.getItem('traffic_v10_data')) || [];
+    let globalCounter = parseInt(localStorage.getItem('traffic_global_id')) || 1;
+    let selectedIndex = -1;
 
-    // 更新時鐘
+    // 語音辨識初始化
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = SpeechRecognition ? new SpeechRecognition() : null;
+    if (recognition) {
+        recognition.lang = 'zh-TW';
+        recognition.onresult = (e) => {
+            if (selectedIndex !== -1) {
+                records[selectedIndex].name = e.results[0][0].transcript;
+                saveData(); renderLogs();
+            }
+            stopMicUI();
+        };
+        recognition.onerror = stopMicUI;
+        recognition.onend = stopMicUI;
+    }
+
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW', { hour12: false });
     }
     setInterval(updateClock, 1000); updateClock();
 
-    // 螢幕常亮
-    async function initWake() {
-        try { if('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
-    }
-    initWake();
-
-    // 渲染清單
     function renderLogs() {
         const list = document.getElementById('log-list');
         list.innerHTML = '';
+        document.getElementById('global-count').innerText = globalCounter - 1;
+
         records.forEach((rec, index) => {
-            const isLatest = (index === records.length - 1);
-            const timeStr = new Date(rec.timestamp).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            
+            const timeStr = new Date(rec.timestamp).toLocaleTimeString('zh-TW', { hour12: false });
             const div = document.createElement('div');
-            div.className = `log-item ${isLatest ? 'latest' : ''}`;
+            div.className = `log-item ${selectedIndex === index ? 'selected' : ''}`;
+            div.onclick = () => { selectedIndex = index; renderLogs(); };
+            
             const colorClass = rec.type === 'red' ? 'red-text' : 'green-text';
             const label = rec.type === 'red' ? '紅燈亮' : '綠燈亮';
+            const nameLabel = rec.name ? `<div class="log-name">📍 ${rec.name}</div>` : '';
 
             div.innerHTML = `
-                <span><span class="log-no">#${index + 1}</span><span class="${colorClass}">${label}</span></span>
-                <span class="${colorClass}">${timeStr}</span>
+                <div class="log-row">
+                    <span><span class="log-no">SN:${rec.sn}</span><span class="${colorClass}">${label}</span></span>
+                    <span class="${colorClass}">${timeStr}</span>
+                </div>
+                ${nameLabel}
             `;
             list.appendChild(div);
         });
-        list.scrollTop = list.scrollHeight;
     }
 
-    // 新增紀錄
     function addRecord(type) {
-        const newRecord = {
-            type: type,
-            timestamp: Date.now()
-        };
-        records.push(newRecord);
-        saveAndRefresh();
+        // 分配當前全局編號並增加計數器
+        records.push({ 
+            sn: globalCounter++, 
+            type: type, 
+            timestamp: Date.now(), 
+            name: "" 
+        });
         
-        // 反饋
-        if (navigator.vibrate) navigator.vibrate(50);
-        document.getElementById('beep').play().catch(()=>{});
-    }
-
-    // 修改時間 (秒)
-    function adjustTime(sec) {
-        if (records.length === 0) return;
-        
-        // 修改最後一筆的時間戳 (加上正負秒數 * 1000 毫秒)
-        const lastIdx = records.length - 1;
-        records[lastIdx].timestamp += (sec * 1000);
-        
-        saveAndRefresh();
-        
-        // 微調震動反饋
-        if (navigator.vibrate) navigator.vibrate(30);
-    }
-
-    function saveAndRefresh() {
-        localStorage.setItem('traffic_data_v6', JSON.stringify(records));
+        selectedIndex = records.length - 1;
+        saveData();
         renderLogs();
+        document.getElementById('log-list').scrollTop = document.getElementById('log-list').scrollHeight;
+        
+        const beep = document.getElementById('beep-sound');
+        beep.currentTime = 0; beep.play().catch(()=>{});
+        if (navigator.vibrate) navigator.vibrate(60);
     }
 
-    function confirmClear() {
-        if(confirm("確定要刪除所有紀錄並重置嗎？")) {
-            records = [];
-            saveAndRefresh();
+    function startVoiceNaming() {
+        if (selectedIndex === -1 || !recognition) return alert(selectedIndex === -1 ? "請選取紀錄" : "不支援語音");
+        document.getElementById('mic-btn').classList.add('mic-active');
+        document.getElementById('mic-btn').innerText = "🎧 聆聽中";
+        recognition.start();
+    }
+
+    function stopMicUI() {
+        document.getElementById('mic-btn').classList.remove('mic-active');
+        document.getElementById('mic-btn').innerText = "🎙 命名";
+    }
+
+    function deleteSelected() {
+        if (selectedIndex === -1) return;
+        if (confirm(`刪除流水號 SN:${records[selectedIndex].sn} 的紀錄嗎？\n(注意：編號將不會被重新使用)`)) {
+            records.splice(selectedIndex, 1);
+            selectedIndex = records.length > 0 ? records.length - 1 : -1;
+            saveData(); renderLogs();
         }
     }
 
-    // 初始化讀取
+    function adjustTime(sec) {
+        if (selectedIndex === -1) return;
+        records[selectedIndex].timestamp += (sec * 1000);
+        saveData(); renderLogs();
+    }
+
+    function exportData() {
+        if (records.length === 0) return alert("尚無紀錄");
+        let txt = `--- 紅綠燈紀錄 (總發放編號至 ${globalCounter-1}) ---\n`;
+        records.forEach(r => {
+            const time = new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour12: false });
+            txt += `SN:${r.sn} ${r.type==='red'?'紅燈':'綠燈'} ${time}${r.name?' ['+r.name+']':''}\n`;
+        });
+        navigator.clipboard.writeText(txt).then(() => alert("✅ 數據已複製！包含永久流水號。"));
+    }
+
+    function saveData() {
+        localStorage.setItem('traffic_v10_data', JSON.stringify(records));
+        localStorage.setItem('traffic_global_id', globalCounter);
+    }
+
     renderLogs();
 </script>
 </body>
