@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Traffic Log V12 - 專業純音效版</title>
+    <title>Traffic Log V18 - 語音回報版</title>
     <style>
         :root {
             --bg: #000; --card-bg: #111; --red: #ff3b30; --green: #4cd964; 
@@ -15,85 +15,112 @@
             height: 100dvh; display: flex; flex-direction: column;
             font-family: -apple-system, system-ui, sans-serif; overflow: hidden;
         }
-        .header { height: 12%; text-align: center; border-bottom: 1px solid #222; padding-top: 5px; }
-        #clock { font-size: 1.8rem; font-weight: 800; font-family: monospace; }
-        #total-stats { font-size: 0.75rem; color: var(--blue); margin-top: 2px; }
+        .header { height: 10%; text-align: center; border-bottom: 1px solid #222; }
+        #clock { font-size: 1.8rem; font-weight: 800; font-family: monospace; margin: 0; }
+        #predict-info { font-size: 0.7rem; color: var(--yellow); }
 
         .log-container { flex: 1; overflow-y: auto; margin: 10px 0; background: var(--card-bg); border-radius: 15px; }
-        .log-item { padding: 12px 15px; border-bottom: 1px solid #222; font-family: monospace; border-left: 4px solid transparent; }
-        .log-item.selected { background: #1a1a00; border-left-color: var(--yellow); }
+        .log-item { padding: 12px 15px; border-bottom: 1px solid #222; font-family: monospace; border-left: 4px solid transparent; transition: 0.3s; }
+        .log-item.selected { background: #1a1a1a; border-left-color: var(--blue); }
+        
+        /* 10秒前閃爍動畫 */
+        .log-item.flashing { 
+            animation: flash-warning 1s infinite; 
+            border-left-color: var(--yellow);
+            background: #2a2a00;
+        }
+        @keyframes flash-warning {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; background: #444400; }
+        }
+
         .log-row { display: flex; justify-content: space-between; width: 100%; font-size: 1.1rem; }
         .log-no { color: #555; margin-right: 8px; font-size: 0.8rem; }
         .log-name { color: var(--yellow); font-size: 0.85rem; margin-top: 4px; }
         .red-text { color: var(--red); font-weight: bold; }
         .green-text { color: var(--green); font-weight: bold; }
 
-        .control-panel {
-            background: #151515; padding: 8px; border-radius: 15px; margin-bottom: 10px;
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; border: 1px solid #333;
-        }
-        .ctrl-btn {
-            background: #222; color: #ccc; border: none; padding: 10px 2px;
-            border-radius: 8px; font-size: 0.75rem; font-weight: bold; cursor: pointer;
-        }
-        .mic-active { animation: mic-pulse 1.5s infinite; background: var(--purple); color: #fff; }
-        @keyframes mic-pulse { 0% {box-shadow: 0 0 0 0 rgba(175,82,222,0.7);} 70% {box-shadow: 0 0 0 8px rgba(175,82,222,0);} 100% {box-shadow: 0 0 0 0 rgba(175,82,222,0);} }
-
-        .data-panel { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-        .data-btn { background: #333; border: none; color: #fff; padding: 8px; border-radius: 8px; font-size: 0.75rem; }
-
-        .footer { height: 18%; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding-bottom: env(safe-area-inset-bottom, 10px); }
-        .main-btn { border: none; border-radius: 20px; color: #fff; font-size: 1.5rem; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .data-panel { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        .data-btn { background: #222; border: 1px solid #333; color: #ccc; padding: 10px 0; border-radius: 10px; font-size: 0.7rem; }
+        
+        .footer { height: 20%; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding-bottom: env(safe-area-inset-bottom, 10px); }
+        .main-btn { border: none; border-radius: 20px; color: #fff; font-size: 1.6rem; font-weight: bold; position: relative; }
         .btn-red { background: linear-gradient(135deg, #d32f2f, #f44336); }
         .btn-green { background: linear-gradient(135deg, #388e3c, #4caf50); }
+        .mic-indicator { position: absolute; top: 10px; right: 10px; font-size: 0.8rem; opacity: 0; transition: 0.3s; }
+        .listening .mic-indicator { opacity: 1; }
     </style>
 </head>
 <body>
 
     <div class="header">
         <div id="clock">00:00:00</div>
-        <div id="total-stats">總累積: <span id="global-count">0</span> | 已顯示: <span id="list-count">0</span></div>
+        <div id="predict-info">語音回報已啟動</div>
     </div>
 
     <div class="log-container" id="log-list"></div>
 
-    <div class="control-panel">
-        <button class="ctrl-btn" onclick="adjustTime(-1)">-1s</button>
-        <button class="ctrl-btn" onclick="adjustTime(1)">+1s</button>
-        <button id="mic-btn" class="ctrl-btn" style="color:var(--purple)" onclick="startVoiceNaming()">🎙命名</button>
-        <button class="ctrl-btn" style="color:var(--red)" onclick="deleteSelected()">🗑刪除</button>
-    </div>
-
     <div class="data-panel">
-        <button class="data-btn" style="color:var(--yellow)" onclick="backupJSON()">💾 備份檔案</button>
-        <button class="data-btn" style="color:var(--green)" onclick="document.getElementById('importFile').click()">📂 匯入檔案</button>
-        <button class="data-btn" style="color:var(--blue)" onclick="exportText()">📋 複製文字</button>
-        <input type="file" id="importFile" style="display:none" onchange="importJSON(this)" accept=".json">
+        <button id="manual-mic" class="data-btn" onclick="startRecognition(true)">🎙 補命名</button>
+        <button class="data-btn" onclick="adjustTime(-1)">-1s修正</button>
+        <button class="data-btn" onclick="adjustTime(1)">+1s修正</button>
+        <button class="data-btn" style="color:var(--red)" onclick="deleteSelected()">🗑 刪除</button>
     </div>
 
     <div class="footer">
-        <button class="main-btn btn-red" onclick="addRecord('red')">🔴 紅燈</button>
-        <button class="main-btn btn-green" onclick="addRecord('green')">🟢 綠燈</button>
+        <button id="red-btn" class="main-btn btn-red" onclick="handleRecord('red')">🔴 紅燈<span class="mic-indicator">🎙...</span></button>
+        <button id="green-btn" class="main-btn btn-green" onclick="handleRecord('green')">🟢 綠燈<span class="mic-indicator">🎙...</span></button>
     </div>
 
-    <!-- 提示音效 (主要嗶聲) -->
     <audio id="sound-main" src="https://actions.google.com/sounds/v1/ui/beep_short.ogg"></audio>
-    <!-- 微調音效 (輕微滴聲) -->
     <audio id="sound-tick" src="https://actions.google.com/sounds/v1/ui/click-20.ogg"></audio>
 
 <script>
-    let records = JSON.parse(localStorage.getItem('traffic_v12_data')) || [];
-    let globalCounter = parseInt(localStorage.getItem('traffic_v12_id')) || 1;
-    let selectedIndex = -1;
+    const STORAGE_KEY = 'TRAFFIC_PERMANENT_DATA';
+    const ID_KEY = 'TRAFFIC_PERMANENT_ID';
 
-    const recognition = window.webkitSpeechRecognition ? new webkitSpeechRecognition() : null;
-    if(recognition) {
+    let records = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    let globalCounter = parseInt(localStorage.getItem(ID_KEY)) || 1;
+    let selectedIndex = -1;
+    let predictionTimer = null;
+
+    // --- 語音辨識與回報設定 ---
+    const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+    let recognition = null;
+    
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
         recognition.lang = 'zh-TW';
-        recognition.onresult = (e) => { 
-            if(selectedIndex !== -1) { records[selectedIndex].name = e.results[0][0].transcript; saveData(); renderLogs(); }
-            stopMicUI();
+        recognition.onresult = (e) => {
+            const result = e.results[0][0].transcript;
+            if (selectedIndex !== -1) {
+                records[selectedIndex].name = result;
+                saveData(); 
+                renderLogs();
+                // 成功命名後說出「已紀錄」
+                speakText("已紀錄");
+                if (records[selectedIndex].type === 'red') checkAndPredict(selectedIndex);
+            }
         };
-        recognition.onend = stopMicUI;
+        recognition.onend = () => {
+            document.querySelectorAll('.main-btn').forEach(b => b.classList.remove('listening'));
+        };
+    }
+
+    // 文字轉語音函數 (TTS)
+    function speakText(text) {
+        if ('speechSynthesis' in window) {
+            const msg = new SpeechSynthesisUtterance();
+            msg.text = text;
+            msg.lang = 'zh-TW';
+            msg.rate = 1.2; // 語速稍微快一點，比較乾脆
+            window.speechSynthesis.speak(msg);
+        }
+    }
+
+    function startRecognition(isManual = false) {
+        if (!recognition) return;
+        recognition.start();
     }
 
     function updateClock() { document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW', {hour12:false}); }
@@ -102,100 +129,84 @@
     function renderLogs() {
         const list = document.getElementById('log-list');
         list.innerHTML = '';
-        document.getElementById('global-count').innerText = globalCounter - 1;
-        document.getElementById('list-count').innerText = records.length;
-        records.forEach((rec, index) => {
+        for (let i = records.length - 1; i >= 0; i--) {
+            const rec = records[i];
             const timeStr = new Date(rec.timestamp).toLocaleTimeString('zh-TW', {hour12:false});
             const div = document.createElement('div');
-            div.className = `log-item ${selectedIndex === index ? 'selected' : ''}`;
-            div.onclick = () => { selectedIndex = index; playSound('tick'); renderLogs(); };
+            div.id = `log-${rec.sn}`;
+            div.className = `log-item ${selectedIndex === i ? 'selected' : ''}`;
+            div.onclick = () => { selectedIndex = i; playSound('tick'); renderLogs(); };
             const c = rec.type === 'red' ? 'red-text' : 'green-text';
             div.innerHTML = `<div class="log-row"><span><span class="log-no">SN:${rec.sn}</span><span class="${c}">${rec.type==='red'?'紅燈亮':'綠燈亮'}</span></span><span class="${c}">${timeStr}</span></div>${rec.name?`<div class="log-name">📍 ${rec.name}</div>`:''}`;
             list.appendChild(div);
-        });
-    }
-
-    // 播放音效函數
-    function playSound(type) {
-        const audio = document.getElementById(type === 'main' ? 'sound-main' : 'sound-tick');
-        audio.currentTime = 0; // 重設時間，讓快速連點也能發聲
-        audio.play().catch(e => console.log("等待交互授權"));
-    }
-
-    function addRecord(type) {
-        records.push({ sn: globalCounter++, type: type, timestamp: Date.now(), name: "" });
-        selectedIndex = records.length - 1;
-        saveData(); renderLogs();
-        document.getElementById('log-list').scrollTop = document.getElementById('log-list').scrollHeight;
-        playSound('main'); // 按下紅/綠燈發出主嗶聲
-    }
-
-    function adjustTime(s) {
-        if(selectedIndex !== -1) { 
-            records[selectedIndex].timestamp += s*1000; 
-            saveData(); renderLogs(); 
-            playSound('tick'); // 微調時發出滴聲
         }
     }
 
-    function startVoiceNaming() {
-        if(selectedIndex === -1 || !recognition) return;
-        playSound('tick');
-        document.getElementById('mic-btn').classList.add('mic-active');
-        recognition.start();
+    function playSound(type) {
+        const audio = document.getElementById(type === 'main' ? 'sound-main' : 'sound-tick');
+        audio.currentTime = 0; audio.play().catch(()=>{});
     }
 
-    function deleteSelected() { 
-        if(selectedIndex !== -1 && confirm("刪除此紀錄？")) { 
-            records.splice(selectedIndex, 1); 
-            selectedIndex=-1; 
-            saveData(); renderLogs(); 
-            playSound('main');
-        } 
+    function handleRecord(type) {
+        const sn = globalCounter++;
+        records.push({ sn: sn, type: type, timestamp: Date.now() - 2000, name: "" });
+        selectedIndex = records.length - 1;
+        saveData(); renderLogs();
+        document.getElementById(type + '-btn').classList.add('listening');
+        playSound('main');
+        document.getElementById('log-list').scrollTop = 0;
+        setTimeout(() => startRecognition(), 300);
     }
 
-    function backupJSON() {
-        playSound('tick');
-        const dataStr = JSON.stringify({ records, globalCounter }, null, 2);
-        const blob = new Blob([dataStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `traffic_backup_${new Date().getTime()}.json`;
-        a.click();
-    }
-
-    function importJSON(input) {
-        const file = input.files[0];
-        if(!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const imported = JSON.parse(e.target.result);
-                if(imported.records) {
-                    records = imported.records;
-                    globalCounter = imported.globalCounter || (Math.max(...records.map(r=>r.sn)) + 1);
-                    saveData(); renderLogs();
-                    playSound('main');
-                    alert("匯入成功！");
+    function checkAndPredict(currentIndex) {
+        const currentRec = records[currentIndex];
+        if (currentRec.type !== 'red') return;
+        let foundDuration = null;
+        for (let i = currentIndex - 1; i >= 0; i--) {
+            if (records[i].name === currentRec.name && records[i].type === 'green' && i > 0 && records[i-1].type === 'red') {
+                foundDuration = records[i].timestamp - records[i-1].timestamp;
+                break;
+            }
+        }
+        if (!foundDuration && currentIndex >= 2) {
+            for (let i = currentIndex - 1; i >= 1; i--) {
+                if (records[i].type === 'green' && records[i-1].type === 'red') {
+                    foundDuration = records[i].timestamp - records[i-1].timestamp;
+                    break;
                 }
-            } catch(err) { alert("讀取失敗"); }
-        };
-        reader.readAsText(file);
+            }
+        }
+        if (foundDuration) {
+            const targetTime = currentRec.timestamp + foundDuration;
+            startCountdown(currentRec.sn, targetTime);
+        }
     }
 
-    function exportText() {
-        playSound('tick');
-        let txt = records.map(r => `SN:${r.sn} ${r.type==='red'?'紅燈':'綠燈'} ${new Date(r.timestamp).toLocaleTimeString('zh-TW',{hour12:false})}${r.name?' ['+r.name+']':''}`).join('\n');
-        navigator.clipboard.writeText(txt).then(() => alert("已複製文字紀錄"));
+    function startCountdown(sn, targetTime) {
+        if (predictionTimer) clearInterval(predictionTimer);
+        predictionTimer = setInterval(() => {
+            const now = Date.now();
+            const remain = (targetTime - now) / 1000;
+            if (remain <= 10 && remain > 0) {
+                const el = document.getElementById(`log-${sn}`);
+                if (el) el.classList.add('flashing');
+                document.getElementById('predict-info').innerText = `⚠️ 準備起步: ${Math.ceil(remain)}s`;
+                if (Math.ceil(remain) === 10) speakText("剩十秒");
+            } else if (remain <= 0) {
+                const el = document.getElementById(`log-${sn}`);
+                if (el) el.classList.remove('flashing');
+                document.getElementById('predict-info').innerText = "🟢 已變燈";
+                clearInterval(predictionTimer);
+            }
+        }, 1000);
     }
 
     function saveData() {
-        localStorage.setItem('traffic_v12_data', JSON.stringify(records));
-        localStorage.setItem('traffic_v12_id', globalCounter);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+        localStorage.setItem(ID_KEY, globalCounter);
     }
-
-    function stopMicUI() { document.getElementById('mic-btn').classList.remove('mic-active'); }
+    function adjustTime(s) { if(selectedIndex !== -1) { records[selectedIndex].timestamp += s*1000; saveData(); renderLogs(); playSound('tick'); } }
+    function deleteSelected() { if(selectedIndex !== -1 && confirm("刪除？")) { records.splice(selectedIndex, 1); selectedIndex=-1; saveData(); renderLogs(); } }
 
     renderLogs();
 </script>
