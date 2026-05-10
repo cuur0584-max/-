@@ -1,258 +1,47 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Traffic Log V23 - 完整介面版</title>
-    <style>
-        :root {
-            --bg: #000; --card-bg: #111; --red: #ff3b30; --green: #4cd964; 
-            --yellow: #ffcc00; --blue: #007aff; --purple: #af52de; --orange: #ff9500; --text: #fff;
-        }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body {
-            background-color: var(--bg); color: var(--text); margin: 0; padding: 8px;
-            height: 100dvh; display: flex; flex-direction: column;
-            font-family: -apple-system, system-ui, sans-serif; overflow: hidden;
-        }
+// --- V28 智慧校正邏輯片段 ---
 
-        /* 頂部時鐘與狀態 (10%) */
-        .header { height: 10%; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 1px solid #222; }
-        #clock { font-size: 1.5rem; font-weight: 800; font-family: monospace; margin: 0; }
-        #gps-status { font-size: 0.65rem; color: var(--blue); }
-
-        /* 中央單列路口顯示 (35%) */
-        .active-card {
-            height: 35%; display: flex; flex-direction: column; justify-content: center; align-items: center;
-            margin: 10px 0; background: var(--card-bg); border-radius: 20px; border: 2px solid #333; transition: 0.3s;
-        }
-        .active-card.flashing { animation: warning-pulse 1s infinite; border-color: var(--yellow); }
-        @keyframes warning-pulse { 0%, 100% { background: #111; } 50% { background: #332200; } }
-
-        .j-name { font-size: 1.6rem; font-weight: bold; color: var(--yellow); margin-bottom: 5px; }
-        #countdown-timer { font-size: 4.5rem; font-weight: 900; color: var(--orange); font-family: monospace; line-height: 1; }
-        .j-detail { font-size: 0.8rem; color: #666; margin-top: 5px; }
-
-        /* 系統管理區 (小按鈕 10%) */
-        .sys-panel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 8px; }
-        .sys-btn { background: #151515; border: 1px solid #333; color: #888; padding: 8px 0; border-radius: 8px; font-size: 0.6rem; }
-
-        /* 中層功能操作區 (15%) */
-        .func-panel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
-        .func-btn { background: #222; border: 1px solid #444; color: #fff; padding: 12px 0; border-radius: 12px; font-size: 0.75rem; font-weight: bold; }
-        .btn-mic { border-color: var(--purple); color: var(--purple); }
-        .btn-gps { border-color: var(--blue); color: var(--blue); }
-        .mic-active { background: var(--purple) !important; color: white !important; }
-
-        /* 底部主按鈕區 (25%) */
-        .footer { height: 25%; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-bottom: env(safe-area-inset-bottom, 10px); }
-        .main-btn { border: none; border-radius: 20px; color: #fff; font-size: 1.8rem; font-weight: bold; }
-        .btn-red { background: linear-gradient(135deg, #d32f2f, #f44336); }
-        .btn-green { background: linear-gradient(135deg, #388e3c, #4caf50); }
-    </style>
-</head>
-<body>
-
-    <div class="header">
-        <div id="clock">00:00:00</div>
-        <div id="gps-status">GPS 初始化中...</div>
-    </div>
-
-    <!-- 中央顯示卡片 -->
-    <div class="active-card" id="main-card">
-        <div class="j-name" id="display-name">尋找路口中...</div>
-        <div id="countdown-timer">--</div>
-        <div class="j-detail" id="display-detail">靠近紀錄點 30m 自動啟動</div>
-    </div>
-
-    <!-- 系統管理區 (備份、匯入、刪除) -->
-    <div class="sys-panel">
-        <button class="sys-btn" onclick="backupJSON()">💾 備份檔案</button>
-        <button class="sys-btn" onclick="document.getElementById('fileIn').click()">📂 匯入檔案</button>
-        <button class="sys-btn" onclick="exportText()">📋 複製文字</button>
-        <button class="sys-btn" style="color:var(--red)" onclick="deleteSelected()">🗑 刪除此點</button>
-        <input type="file" id="fileIn" style="display:none" onchange="importJSON(this)">
-    </div>
-
-    <!-- 中層功能區 (微調、定位、命名) -->
-    <div class="func-panel">
-        <button class="func-btn" onclick="adjustTime(-1)">-1s修正</button>
-        <button class="func-btn" onclick="adjustTime(1)">+1s修正</button>
-        <button id="mic-btn" class="func-btn btn-mic" onclick="startRecognition('name')">🎙 命名</button>
-        <button class="func-btn btn-gps" onclick="repositionGPS()">📍 定位更新</button>
-    </div>
-
-    <!-- 底部主按鈕 -->
-    <div class="footer">
-        <button class="main-btn btn-red" onclick="handleRecord('red')">🔴 紅燈</button>
-        <button class="main-btn btn-green" onclick="handleRecord('green')">🟢 綠燈</button>
-    </div>
-
-    <audio id="sound-main" src="https://actions.google.com/sounds/v1/ui/beep_short.ogg"></audio>
-    <audio id="sound-tick" src="https://actions.google.com/sounds/v1/ui/click-20.ogg"></audio>
-
-<script>
-    const MASTER_KEY = 'TRAFFIC_MASTER_DATA';
-    const MASTER_ID = 'TRAFFIC_MASTER_ID';
-
-    let records = JSON.parse(localStorage.getItem(MASTER_KEY)) || [];
-    let globalCounter = parseInt(localStorage.getItem(MASTER_ID)) || 1;
-    let selectedIndex = -1;
-    let userPos = { lat: 0, lon: 0 };
-    let predictionTimer = null;
-
-    // --- 語音系統 ---
-    const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
-    let recognition = SpeechRecognition ? new SpeechRecognition() : null;
-    if(recognition) {
-        recognition.lang = 'zh-TW';
-        recognition.onresult = (e) => {
-            const res = e.results[0][0].transcript;
-            if (selectedIndex === -1) return;
-            records[selectedIndex].name = res;
-            speak("已紀錄 " + res);
-            saveData(); updateUI();
-        };
-        recognition.onend = () => document.getElementById('mic-btn').classList.remove('mic-active');
-    }
-
-    function speak(t) {
-        if(!window.speechSynthesis) return;
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(t);
-        u.lang = 'zh-TW'; u.rate = 1.3;
-        window.speechSynthesis.speak(u);
-    }
-
-    function startRecognition() {
-        if(!recognition) return;
-        document.getElementById('mic-btn').classList.add('mic-active');
-        recognition.start();
-    }
-
-    // --- GPS 邏輯 ---
-    function initGPS() {
-        if (!navigator.geolocation) return;
-        navigator.geolocation.watchPosition((pos) => {
-            userPos.lat = pos.coords.latitude;
-            userPos.lon = pos.coords.longitude;
-            document.getElementById('gps-status').innerText = `GPS 定位中 (誤差: ${Math.round(pos.coords.accuracy)}m)`;
-            findNearbyJunction();
-        }, null, { enableHighAccuracy: true });
-    }
-
-    function getDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371e3;
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    }
-
-    function findNearbyJunction() {
-        let nearestIdx = -1;
-        records.forEach((rec, index) => {
-            if (rec.lat && rec.lon) {
-                const dist = getDistance(userPos.lat, userPos.lon, rec.lat, rec.lon);
-                if (dist < 35) nearestIdx = index;
-            }
-        });
-        if (nearestIdx !== -1 && selectedIndex !== nearestIdx) {
-            selectedIndex = nearestIdx;
-            speak("進入路口: " + (records[selectedIndex].name || "未命名"));
-            updateUI();
-            if(records[selectedIndex].type === 'red') startPredict(selectedIndex);
-        }
-    }
-
-    function repositionGPS() {
-        if (selectedIndex === -1) return;
-        records[selectedIndex].lat = userPos.lat;
-        records[selectedIndex].lon = userPos.lon;
-        saveData();
-        speak("更新定位");
-        updateUI();
-        playSound('main');
-    }
-
-    function updateUI() {
-        const nameEl = document.getElementById('display-name');
-        if (selectedIndex !== -1) {
-            const rec = records[selectedIndex];
-            nameEl.innerText = rec.name || `SN:${rec.sn}`;
-            document.getElementById('display-detail').innerText = `座標: ${rec.lat.toFixed(5)}, ${rec.lon.toFixed(5)}`;
-        }
-    }
-
-    function handleRecord(type) {
+function handleRecord(type) {
+    const now = Date.now();
+    currentRecType = type;
+    recognitionMode = 'seconds';
+    
+    // 1. 尋找或建立路口紀錄
+    if (selectedIndex === -1) {
         records.push({ 
-            sn: globalCounter++, type, 
-            timestamp: Date.now() - 2000, 
-            name: "", lat: userPos.lat, lon: userPos.lon 
+            sn: globalCounter++, name: "", lat: userPos.lat, lon: userPos.lon, 
+            heading: currentHeading, redDur: 0, greenDur: 0, redSync: 0, greenSync: 0
         });
         selectedIndex = records.length - 1;
-        saveData(); updateUI();
-        playSound('main');
-        setTimeout(() => startRecognition(), 300);
     }
 
-    function startPredict(idx) {
-        const cur = records[idx];
-        const dur = findHistoricalDur(idx);
-        if (!dur) return;
-        const target = cur.timestamp + dur;
-        if (predictionTimer) clearInterval(predictionTimer);
-        predictionTimer = setInterval(() => {
-            const rem = (target - Date.now()) / 1000;
-            const card = document.getElementById('main-card');
-            if (rem <= 10 && rem > 0) {
-                card.classList.add('flashing');
-                document.getElementById('countdown-timer').innerText = Math.ceil(rem);
-                if (Math.ceil(rem) === 10) speak("剩十秒");
-            } else if (rem <= 0) {
-                card.classList.remove('flashing');
-                document.getElementById('countdown-timer').innerText = "GO";
-                clearInterval(predictionTimer);
-            } else {
-                document.getElementById('countdown-timer').innerText = Math.ceil(rem) + "s";
-            }
-        }, 1000);
+    const rec = records[selectedIndex];
+
+    // 2. 自動校正邏輯 (核心！)
+    if (type === 'green' && rec.redSync > 0) {
+        // 如果現在按綠燈，且之前有按紅燈
+        const measuredRedDur = now - rec.redSync; 
+        
+        // 如果測得的紅燈時間與紀錄的 redDur 誤差超過 3 秒
+        if (rec.redDur > 0 && Math.abs(measuredRedDur - rec.redDur) > 3000) {
+            const correctedSec = Math.round(measuredRedDur / 1000);
+            rec.redDur = correctedSec * 1000; // 自動修正
+            speak(`已自動修正紅燈為 ${correctedSec} 秒`);
+        } else if (rec.redDur === 0) {
+            // 如果原本沒錄過秒數，這一次按鍵自動當作第一次學習
+            rec.redDur = Math.round(measuredRedDur / 1000) * 1000;
+            speak(`學習完成，紅燈 ${Math.round(measuredRedDur / 1000)} 秒`);
+        }
     }
 
-    function findHistoricalDur(idx) {
-        let pool = records.filter((r, i) => i < idx && r.name === records[idx].name && r.type === 'green');
-        if (pool.length === 0) return null;
-        const green = pool[pool.length-1];
-        const red = records[records.indexOf(green)-1];
-        return (red && red.type === 'red') ? green.timestamp - red.timestamp : null;
-    }
+    // 3. 更新同步點
+    if (type === 'red') rec.redSync = now;
+    else rec.greenSync = now;
 
-    // --- 系統功能 ---
-    function backupJSON() {
-        const data = JSON.stringify({ records, globalCounter }, null, 2);
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
-        a.download = `traffic_v23_${Date.now()}.json`;
-        a.click();
-    }
-
-    function importJSON(input) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const data = JSON.parse(e.target.result);
-            records = data.records; globalCounter = data.globalCounter;
-            saveData(); renderLogs(); location.reload();
-        };
-        reader.readAsText(input.files[0]);
-    }
-
-    function saveData() { localStorage.setItem(MASTER_KEY, JSON.stringify(records)); localStorage.setItem(MASTER_ID, globalCounter); }
-    function playSound(t) { const a = document.getElementById(t === 'main' ? 'sound-main' : 'sound-tick'); a.currentTime = 0; a.play().catch(()=>{}); }
-    function adjustTime(s) { if(selectedIndex !== -1) { records[selectedIndex].timestamp += s*1000; saveData(); } }
-    function deleteSelected() { if(selectedIndex !== -1 && confirm("刪除？")) { records.splice(selectedIndex, 1); selectedIndex=-1; saveData(); location.reload(); } }
-    function exportText() { navigator.clipboard.writeText(records.map(r => `SN:${r.sn} ${r.type} ${new Date(r.timestamp).toLocaleTimeString()}`).join('\n')).then(()=>alert("已複製")); }
-
-    window.onload = () => { initGPS(); setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW', {hour12:false}); }, 1000); };
-</script>
-</body>
-</html>
+    saveData(); 
+    updateUI();
+    document.getElementById(type + '-btn').classList.add('listening');
+    document.getElementById('sound-main').play();
+    
+    // 4. 開啟語音辨識 (讓你還是可以手動輸入)
+    setTimeout(() => startRecognition('seconds'), 400);
+}
