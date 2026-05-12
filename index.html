@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Traffic Pro V37 - 音訊強化版</title>
+    <title>Traffic Pro V38 - 列表滑動版</title>
     <style>
         :root {
             --bg: #000; --card-bg: #111; --red: #ff3b30; --green: #4cd964; 
@@ -15,46 +15,81 @@
             height: 100dvh; display: flex; flex-direction: column;
             font-family: -apple-system, system-ui, sans-serif; overflow: hidden;
         }
-        .header { height: 8%; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+
+        /* 頂部時鐘 */
+        .header { height: 8%; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 1px solid #222; }
         #clock { font-size: 1.4rem; font-weight: 800; font-family: monospace; }
+        #gps-info { font-size: 0.6rem; color: var(--blue); }
+
+        /* 主顯示儀表 (30%) */
         .active-card {
-            height: 45%; display: flex; flex-direction: column; justify-content: center; align-items: center;
-            margin: 5px 0; background: var(--card-bg); border-radius: 35px; border: 2px solid #333; position: relative; overflow: hidden;
+            height: 30%; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            margin: 10px 0; background: var(--card-bg); border-radius: 25px; border: 2px solid #333; position: relative;
         }
         .active-card.flashing { animation: warning-pulse 1s infinite; border-color: var(--yellow); }
         @keyframes warning-pulse { 0%, 100% { background: #111; } 50% { background: #332200; } }
-        #display-name { font-size: 2.2rem; font-weight: 900; color: var(--yellow); text-align: center; }
-        #countdown { font-size: 6rem; font-weight: 900; color: var(--orange); font-family: monospace; line-height: 1; }
-        .info-row { font-size: 0.8rem; color: #666; margin-top: 5px; }
-        .sn-badge { position: absolute; top: 20px; left: 25px; color: #444; font-size: 0.8rem; }
+
+        #display-name { font-size: 1.8rem; font-weight: bold; color: var(--yellow); text-align: center; }
+        #countdown { font-size: 5rem; font-weight: 900; color: var(--red); font-family: monospace; line-height: 1; }
+        .info-sub { font-size: 0.8rem; color: #888; margin-top: 5px; }
+
+        /* 滑動歷史列表 (22%) */
+        .history-container {
+            height: 22%; overflow-y: auto; margin-bottom: 10px;
+            background: #080808; border-radius: 15px; border: 1px solid #222;
+            scrollbar-width: none;
+        }
+        .history-item {
+            padding: 10px 15px; border-bottom: 1px solid #1a1a1a;
+            display: flex; justify-content: space-between; align-items: center;
+            font-family: monospace; font-size: 0.9rem;
+        }
+        .history-item.selected { background: #1a1a00; border-left: 3px solid var(--yellow); }
+        .h-sn { color: #555; margin-right: 10px; }
+        .h-red { color: var(--red); }
+        .h-green { color: var(--green); }
+
+        /* 系統管理按鈕 (8%) */
         .sys-panel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 10px; }
-        .sys-btn { background: #151515; border: 1px solid #333; color: #888; padding: 10px 0; border-radius: 10px; font-size: 0.6rem; }
-        .footer { height: 35%; display: grid; grid-template-columns: 1fr 1.5fr 1fr; align-items: center; justify-items: center; gap: 10px; padding-bottom: env(safe-area-inset-bottom, 20px); }
-        .circle-btn { border: none; border-radius: 50%; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #fff; cursor: pointer; box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
+        .sys-btn { background: #151515; border: 1px solid #333; color: #888; padding: 8px 0; border-radius: 8px; font-size: 0.55rem; }
+
+        /* 底部圓形按鈕區 (25%) */
+        .footer { 
+            height: 25%; display: flex; justify-content: center; align-items: center; gap: 20px; 
+            padding-bottom: env(safe-area-inset-bottom, 10px);
+        }
+        .circle-btn {
+            border: none; border-radius: 50%; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; color: #fff; cursor: pointer;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        }
         .circle-btn:active { transform: scale(0.9); }
-        .btn-record { width: 130px; height: 130px; background: linear-gradient(135deg, var(--red), #b01a1a); font-size: 1.3rem; font-weight: 900; }
-        .btn-side { width: 75px; height: 75px; background: #222; border: 1px solid #444; font-size: 0.75rem; font-weight: bold; }
-        .btn-rename { border-color: var(--purple); color: var(--purple); }
-        .btn-cycle { border-color: var(--orange); color: var(--orange); }
-        .btn-gps { border-color: var(--blue); color: var(--blue); }
+        .btn-record { width: 110px; height: 110px; background: linear-gradient(135deg, var(--red), #b01a1a); font-size: 1.2rem; font-weight: 900; }
+        .btn-side { width: 70px; height: 70px; background: #222; border: 1px solid #444; font-size: 0.7rem; font-weight: bold; }
         .mic-active { background: #fff !important; color: #000 !important; animation: mic-glow 1.2s infinite; }
-        @keyframes mic-glow { 0% { box-shadow: 0 0 10px #fff; } 50% { box-shadow: 0 0 30px #fff; } 100% { box-shadow: 0 0 10px #fff; } }
+        @keyframes mic-glow { 0% { box-shadow: 0 0 10px #fff; } 50% { box-shadow: 0 0 30px #fff; } }
     </style>
 </head>
-<body onclick="forceResumeAudio()">
+<body onclick="forceAudio()">
 
     <div class="header">
         <div id="clock">00:00:00</div>
-        <div id="gps-info" style="font-size: 0.6rem; color: var(--blue);">GPS 定位中...</div>
+        <div id="gps-info">GPS 初始化...</div>
     </div>
 
+    <!-- 主儀表板 -->
     <div class="active-card" id="main-card">
-        <div class="sn-badge" id="display-sn">SN:--</div>
-        <div id="display-name">請先點擊畫面</div>
+        <div id="display-name">點擊畫面開始</div>
         <div id="countdown">--</div>
-        <div class="info-row" id="display-state">啟動語音系統</div>
+        <div class="info-sub" id="display-state">語音：紅 [路名]</div>
     </div>
 
+    <!-- 可滑動歷史清單 -->
+    <div class="history-container" id="history-list">
+        <!-- 紀錄會出現在這裡 -->
+    </div>
+
+    <!-- 管理按鈕 -->
     <div class="sys-panel">
         <button class="sys-btn" onclick="backupBtn()">💾 備份</button>
         <button class="sys-btn" onclick="importBtn()">📂 匯入</button>
@@ -63,54 +98,47 @@
         <input type="file" id="fileIn" style="display:none" onchange="importJSON(this)">
     </div>
 
+    <!-- 底部圓鈕 -->
     <div class="footer">
         <div style="display: flex; flex-direction: column; gap: 10px;">
-            <button id="btn-rename" class="circle-btn btn-side btn-rename" onclick="startSpeech('rename')"><span>🎙 改名</span></button>
-            <button class="circle-btn btn-side btn-gps" onclick="gpsBtn()"><span>📍 定位</span></button>
+            <button id="btn-rename" class="circle-btn btn-side" style="color:var(--purple)" onclick="startSpeech('rename')">🎙 改名</button>
+            <button class="circle-btn btn-side" style="color:var(--blue)" onclick="gpsBtn()">📍 定位</button>
         </div>
-        <button id="btn-record" class="circle-btn btn-record" onclick="startSpeech('log')"><span>🎙 紀錄</span></button>
+        <button id="btn-record" class="circle-btn btn-record" onclick="startSpeech('log')">🎙 紀錄</button>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-            <button id="btn-cycle" class="circle-btn btn-side btn-cycle" onclick="startSpeech('cycle')"><span>⏱ 週期</span></button>
-            <button class="circle-btn btn-side" style="color:#888" onclick="refreshBtn()"><span>🔄 刷新</span></button>
+            <button id="btn-cycle" class="circle-btn btn-side" style="color:var(--orange)" onclick="startSpeech('cycle')">⏱ 週期</button>
+            <button class="circle-btn btn-side" style="color:#888" onclick="refreshBtn()">🔄 刷新</button>
         </div>
     </div>
 
     <audio id="sound-beep" src="https://actions.google.com/sounds/v1/ui/beep_short.ogg"></audio>
 
 <script>
-    const MASTER_KEY = 'TRAFFIC_V37_MASTER';
-    const MASTER_ID = 'TRAFFIC_V37_ID';
+    const MASTER_KEY = 'TRAFFIC_V38_MASTER';
+    const MASTER_ID = 'TRAFFIC_V38_ID';
     let records = JSON.parse(localStorage.getItem(MASTER_KEY)) || [];
     let globalCounter = parseInt(localStorage.getItem(MASTER_ID)) || 1;
-    let selectedIndex = -1, userPos = { lat: 0, lon: 0 }, currentHeading = 0;
-    let predictTimer = null, speechMode = 'log';
+    let selectedIndex = -1, userPos = { lat: 0, lon: 0 }, currentHeading = 0, predictTimer = null, speechMode = 'log';
 
-    // --- 強制喚醒語音引擎 ---
-    function forceResumeAudio() {
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.resume();
-        }
-        const beep = document.getElementById('sound-beep');
-        beep.volume = 0.1; beep.play().catch(()=>{});
-        if(document.getElementById('display-name').innerText === "請先點擊畫面") {
-            document.getElementById('display-name').innerText = "尋找路口中";
-            speak("語音系統已就緒");
+    function forceAudio() {
+        if ('speechSynthesis' in window) window.speechSynthesis.resume();
+        document.getElementById('sound-beep').volume=0.1; document.getElementById('sound-beep').play().catch(()=>{});
+        if(document.getElementById('display-name').innerText === "點擊畫面開始") {
+            document.getElementById('display-name').innerText = "尋找新路口";
+            speak("系統已就緒");
         }
     }
 
     function speak(t, callback) {
-        if (!window.speechSynthesis) return;
-        window.speechSynthesis.cancel(); // 清楚排隊語音
+        if(!window.speechSynthesis) return;
+        window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(t);
-        u.lang = 'zh-TW'; u.volume = 1.0; u.rate = 1.4; u.pitch = 1.0;
-        if (callback) u.onend = callback;
+        u.lang = 'zh-TW'; u.volume = 1.0; u.rate = 1.4;
+        if(callback) u.onend = callback;
         window.speechSynthesis.speak(u);
-        
-        // 針對部分 Android 的安全機制，如果 2 秒內沒反應，強制觸發 callback
-        if (callback) setTimeout(callback, 2000); 
     }
 
-    // --- 按鈕邏輯 ---
+    // 按鈕功能語音化
     function backupBtn() { speak("備份資料"); backupJSON(); }
     function importBtn() { speak("匯入檔案"); document.getElementById('fileIn').click(); }
     function copyBtn() { speak("複製文字"); exportText(); }
@@ -118,29 +146,28 @@
     function gpsBtn() { speak("更新定位"); repositionGPS(); }
     function refreshBtn() { speak("刷新頁面"); setTimeout(()=>location.reload(), 800); }
 
-    const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
-    let recognition = SpeechRecognition ? new SpeechRecognition() : null;
-    if(recognition) {
-        recognition.lang = 'zh-TW';
-        recognition.onresult = (e) => {
+    const Recognition = window.webkitSpeechRecognition || window.Recognition;
+    let recog = Recognition ? new Recognition() : null;
+    if(recog) {
+        recog.lang = 'zh-TW';
+        recog.onresult = (e) => {
             const res = e.results[0][0].transcript.trim();
-            if (speechMode === 'log') processLog(res);
-            else if (speechMode === 'cycle') processCycle(res);
-            else if (speechMode === 'rename') processRename(res);
+            if(speechMode==='log') processLog(res);
+            else if(speechMode==='cycle') processCycle(res);
+            else processRename(res);
         };
-        recognition.onend = () => document.querySelectorAll('.circle-btn').forEach(b => b.classList.remove('mic-active'));
+        recog.onend = () => document.querySelectorAll('.circle-btn').forEach(b => b.classList.remove('mic-active'));
     }
 
     function startSpeech(mode) {
-        if(!recognition) return alert("不支援語音辨識");
+        if(!recog) return;
         speechMode = mode;
-        const btnNames = { 'log': '紀錄', 'cycle': '設定週期', 'rename': '路口改名' };
-        const btnIds = { 'log': 'btn-record', 'cycle': 'btn-cycle', 'rename': 'btn-rename' };
-        
-        speak(btnNames[mode], () => {
-            document.getElementById(btnIds[mode]).classList.add('mic-active');
-            document.getElementById('sound-beep').play().catch(()=>{});
-            recognition.start();
+        const names = {'log':'紀錄','cycle':'設定週期','rename':'改名'};
+        const ids = {'log':'btn-record','cycle':'btn-cycle','rename':'btn-rename'};
+        speak(names[mode], () => {
+            document.getElementById(ids[mode]).classList.add('mic-active');
+            document.getElementById('sound-beep').play();
+            recog.start();
         });
     }
 
@@ -149,6 +176,7 @@
         const name = text.substring(1).trim();
         const now = Date.now() - 4000;
         let isNew = (selectedIndex === -1) || (calcDist(userPos.lat, userPos.lon, records[selectedIndex].lat, records[selectedIndex].lon) > 50);
+        
         if (isNew) {
             records.push({ sn: globalCounter++, name: name || "未命名", lat: userPos.lat, lon: userPos.lon, heading: currentHeading, cycleTime: 60000, lastSync: now, lastSyncType: type });
             selectedIndex = records.length - 1;
@@ -156,19 +184,19 @@
             if (name) records[selectedIndex].name = name;
             records[selectedIndex].lastSync = now; records[selectedIndex].lastSyncType = type;
         }
-        save(); updateUI(); speak(`已紀錄${records[selectedIndex].name}${type==='red'?'紅燈':'綠燈'}`); startPredict();
+        save(); renderHistory(); speak(`已紀錄${records[selectedIndex].name}${type==='red'?'紅燈':'綠燈'}`); startPredict();
     }
 
     function processCycle(text) {
         const num = text.match(/\d+/);
         if (num && selectedIndex !== -1) {
             records[selectedIndex].cycleTime = parseInt(num[0]) * 1000;
-            save(); updateUI(); speak(`週期已設定為${num[0]}秒`); startPredict();
+            save(); renderHistory(); speak(`週期${num[0]}秒`); startPredict();
         }
     }
 
     function processRename(text) {
-        if (selectedIndex !== -1) { records[selectedIndex].name = text; save(); updateUI(); speak("名稱已更新"); }
+        if (selectedIndex !== -1) { records[selectedIndex].name = text; save(); renderHistory(); speak("改名成功"); }
     }
 
     function startPredict() {
@@ -177,9 +205,33 @@
             if (selectedIndex === -1) return;
             const rec = records[selectedIndex];
             if (!rec.lastSync) return;
+
             const elapsed = (Date.now() - rec.lastSync) % rec.cycleTime;
             const remain = Math.ceil((rec.cycleTime - elapsed) / 1000);
-            document.getElementById('countdown').innerText = remain;
+            
+            const timerEl = document.getElementById('countdown');
+            const stateEl = document.getElementById('display-state');
+            timerEl.innerText = remain;
+
+            // 顏色與狀態切換
+            if (rec.lastSyncType === 'red') {
+                if (elapsed < rec.cycleTime / 2) { 
+                    timerEl.style.color = "var(--red)"; 
+                    stateEl.innerText = "🔴 紅燈中"; 
+                } else { 
+                    timerEl.style.color = "var(--green)"; 
+                    stateEl.innerText = "🟢 綠燈中"; 
+                }
+            } else {
+                if (elapsed < rec.cycleTime / 2) { 
+                    timerEl.style.color = "var(--green)"; 
+                    stateEl.innerText = "🟢 綠燈中"; 
+                } else { 
+                    timerEl.style.color = "var(--red)"; 
+                    stateEl.innerText = "🔴 紅燈中"; 
+                }
+            }
+
             const card = document.getElementById('main-card');
             if (remain <= 10) {
                 card.classList.add('flashing');
@@ -188,11 +240,41 @@
         }, 1000);
     }
 
+    // 渲染滑動列表
+    function renderHistory() {
+        const list = document.getElementById('history-list');
+        list.innerHTML = '';
+        // 由新到舊顯示
+        for (let i = records.length - 1; i >= 0; i--) {
+            const r = records[i];
+            const item = document.createElement('div');
+            item.className = `history-item ${selectedIndex === i ? 'selected' : ''}`;
+            item.onclick = () => { selectedIndex = i; speak("選取" + r.name); renderHistory(); startPredict(); };
+            
+            const timeStr = new Date(r.lastSync).toLocaleTimeString('zh-TW', {hour12:false, hour:'2-digit', minute:'2-digit'});
+            const typeClass = r.lastSyncType === 'red' ? 'h-red' : 'h-green';
+            
+            item.innerHTML = `
+                <span><span class="h-sn">#${r.sn}</span><b>${r.name}</b></span>
+                <span class="${typeClass}">${r.lastSyncType==='red'?'紅':'綠'} ${timeStr}</span>
+            `;
+            list.appendChild(item);
+        }
+        updateUI();
+    }
+
+    function updateUI() {
+        if (selectedIndex !== -1) {
+            const r = records[selectedIndex];
+            document.getElementById('display-name').innerText = r.name;
+        }
+    }
+
     function initGPS() {
         navigator.geolocation.watchPosition((pos) => {
             userPos.lat = pos.coords.latitude; userPos.lon = pos.coords.longitude;
             document.getElementById('gps-info').innerText = `GPS 就緒 (${Math.round(pos.coords.accuracy)}m)`;
-            autoCheckLocation();
+            autoCheck();
         }, null, { enableHighAccuracy: true });
     }
 
@@ -205,46 +287,32 @@
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
-    function autoCheckLocation() {
+    function autoCheck() {
         if (selectedIndex === -1) {
             records.forEach((r, i) => {
                 if (calcDist(userPos.lat, userPos.lon, r.lat, r.lon) < 50) {
-                    selectedIndex = i; speak("接近" + r.name); updateUI(); startPredict();
+                    selectedIndex = i; speak("接近" + r.name); renderHistory(); startPredict();
                 }
             });
-        } else if (calcDist(userPos.lat, userPos.lon, records[selectedIndex].lat, records[selectedIndex].lon) > 60) {
-            selectedIndex = -1; updateUI(); if(predictTimer) clearInterval(predictTimer);
+        } else if (calcDist(userPos.lat, userPos.lon, records[selectedIndex].lat, records[selectedIndex].lon) > 70) {
+            selectedIndex = -1; renderHistory(); if(predictTimer) clearInterval(predictTimer);
         }
     }
 
     function repositionGPS() {
         if (selectedIndex === -1) return;
         records[selectedIndex].lat = userPos.lat; records[selectedIndex].lon = userPos.lon;
-        records[selectedIndex].heading = currentHeading; save(); updateUI();
-    }
-
-    function updateUI() {
-        if (selectedIndex !== -1) {
-            const r = records[selectedIndex];
-            document.getElementById('display-sn').innerText = `SN:${r.sn}`;
-            document.getElementById('display-name').innerText = r.name;
-        } else {
-            document.getElementById('display-sn').innerText = "SN:--";
-            document.getElementById('display-name').innerText = "尋找新路口";
-            document.getElementById('countdown').innerText = "--";
-        }
+        records[selectedIndex].heading = currentHeading; save(); renderHistory();
     }
 
     function save() { localStorage.setItem(MASTER_KEY, JSON.stringify(records)); localStorage.setItem(MASTER_ID, globalCounter); }
-    function backupJSON() { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({records, globalCounter},null,2)],{type:"application/json"})); a.download=`traffic_v37.json`; a.click(); }
+    function backupJSON() { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({records, globalCounter},null,2)],{type:"application/json"})); a.download=`traffic_v38.json`; a.click(); }
     function importJSON(i) { const r = new FileReader(); r.onload=(e)=>{ const d=JSON.parse(e.target.result); records=d.records; globalCounter=d.globalCounter; save(); location.reload(); }; r.readAsText(i.files[0]); }
     function deleteSelected() { if(selectedIndex!==-1 && confirm("刪除？")){ records.splice(selectedIndex,1); selectedIndex=-1; save(); location.reload(); } }
-    function exportText() { navigator.clipboard.writeText(records.map(r=>`SN:${r.sn} ${r.name}`).join('\n')).then(()=>alert("已複製")); }
+    function exportText() { navigator.clipboard.writeText(records.map(r=>`#${r.sn} ${r.name} ${r.lastSyncType}`).join('\n')).then(()=>alert("已複製")); }
+    function enableAudio() { if(window.speechSynthesis.paused) window.speechSynthesis.resume(); }
 
-    window.onload = () => { 
-        initGPS(); 
-        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW',{hour12:false}); }, 1000); 
-    };
+    window.onload = () => { initGPS(); setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW',{hour12:false}); }, 1000); renderHistory(); };
 </script>
 </body>
 </html>
