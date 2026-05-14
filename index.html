@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Traffic Pro V50 - 終極穩定版</title>
+    <title>Traffic Pro V57 - 多樣本採樣版</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -12,184 +12,201 @@
         body { background-color: var(--bg); color: var(--text); margin: 0; padding: 8px; height: 100dvh; display: flex; flex-direction: column; font-family: system-ui, sans-serif; overflow: hidden; }
         .header { height: 8%; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 1px solid #222; }
         #clock { font-size: 1.4rem; font-weight: 800; font-family: monospace; }
-        .active-card { height: 26%; display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 5px 0; background: var(--card-bg); border-radius: 25px; border: 2px solid #333; position: relative; }
+        #gps-info { font-size: 0.6rem; color: var(--blue); }
+
+        /* 主儀表顯示 */
+        .active-card { height: 28%; display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 5px 0; background: var(--card-bg); border-radius: 25px; border: 2px solid #333; position: relative; transition: 0.3s; }
+        .active-card.in-range { border-color: var(--blue); border-width: 3px; }
         .active-card.flashing { animation: warning-pulse 1s infinite; border-color: var(--yellow); }
         @keyframes warning-pulse { 0%, 100% { background: #111; } 50% { background: #332200; } }
-        #display-name { font-size: 1.5rem; font-weight: 900; color: var(--yellow); text-align:center; padding:0 10px;}
-        #next-change-time { font-size: 1rem; font-weight: bold; margin-bottom: 2px; }
-        #countdown { font-size: 4.5rem; font-weight: 900; color: #fff; font-family: monospace; line-height: 1; }
+        
+        #display-name { font-size: 1.6rem; font-weight: 900; color: var(--yellow); text-align:center; padding:0 15px; text-decoration: underline; text-underline-offset: 5px; }
+        #countdown-label { font-size: 1rem; font-weight: bold; margin-top: 5px; }
+        #countdown { font-size: 5rem; font-weight: 900; color: #fff; font-family: monospace; line-height: 1; }
+
+        /* 滑動歷史 */
         .history-container { flex: 1; overflow-y: auto; margin-bottom: 8px; background: #080808; border-radius: 15px; border: 1px solid #222; }
-        .history-item { padding: 10px 15px; border-bottom: 1px solid #1a1a1a; display: flex; justify-content: space-between; font-size: 0.85rem; }
+        .history-item { padding: 12px 15px; border-bottom: 1px solid #1a1a1a; display: flex; justify-content: space-between; font-size: 0.8rem; align-items: center; }
         .history-item.selected { background: #1a1a00; border-left: 4px solid var(--yellow); }
-        .sys-panel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
-        .sys-btn { background: #151515; border: 1px solid #333; color: #fff; padding: 10px 0; border-radius: 10px; font-size: 0.7rem; font-weight: bold; }
+        .h-stats { font-size: 0.65rem; color: #666; margin-top: 3px; }
+        .h-cycle-box { text-align: right; font-family: monospace; }
+
+        /* 按鈕區 */
+        .sys-panel { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 8px; }
+        .sys-btn { background: #151515; border: 1px solid #333; color: #fff; padding: 10px 0; border-radius: 8px; font-size: 0.55rem; font-weight: bold; }
+        
         .footer { height: 28%; display: grid; grid-template-columns: 1fr 1.5fr 1fr; align-items: center; justify-items: center; padding-bottom: env(safe-area-inset-bottom, 10px); }
         .circle-btn { border: none; border-radius: 50%; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #fff; cursor: pointer; box-shadow: 0 8px 20px rgba(0,0,0,0.5); transition: 0.1s; }
-        .btn-main-red { width: 100px; height: 100px; background: linear-gradient(135deg, var(--red), #800); font-size: 1rem; font-weight: 900; }
-        .btn-main-green { width: 100px; height: 100px; background: linear-gradient(135deg, var(--green), #060); font-size: 1rem; font-weight: 900; }
+        .circle-btn:active { transform: scale(0.9); }
+        
+        .btn-main-red { width: 105px; height: 105px; background: linear-gradient(135deg, var(--red), #800); font-size: 1.1rem; font-weight: 900; }
+        .btn-main-green { width: 105px; height: 105px; background: linear-gradient(135deg, var(--green), #060); font-size: 1.1rem; font-weight: 900; }
         .btn-side { width: 60px; height: 60px; background: #222; border: 1px solid #444; font-size: 0.6rem; font-weight: bold; }
+
         #settings-overlay, #map-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 10001; display: none; padding: 20px; flex-direction: column; }
         .mic-active { background: #fff !important; color: #000 !important; }
-        .user-pos-marker { background: var(--blue); border: 2px solid white; border-radius: 50%; width: 12px; height: 12px; }
     </style>
 </head>
-<body onclick="initService()">
+<body onclick="startService()">
 
     <div class="header">
         <div id="clock">00:00:00</div>
-        <div id="gps-info" style="font-size: 0.6rem; color: var(--blue);">點擊畫面啟動語音與方位感應</div>
+        <div id="gps-info">點擊螢幕啟動 GPS 與語音</div>
     </div>
 
     <div class="active-card" id="main-card">
-        <div id="display-name">等待系統啟動</div>
-        <div id="next-change-time">方位: --°</div>
+        <div id="display-name" onclick="manualRename()">尋找定位點</div>
+        <div id="countdown-label">--</div>
         <div id="countdown">--</div>
     </div>
 
     <div class="history-container" id="history-list"></div>
 
     <div class="sys-panel">
-        <button class="sys-btn" style="color:var(--green)" onclick="testAudioBtn()">🔊 測試</button>
-        <button class="sys-btn" style="color:var(--orange)" onclick="toggleSettings()">⚙️ 調校</button>
         <button class="sys-btn" style="color:var(--blue)" onclick="toggleMap()">🗺 地圖</button>
-        <button class="sys-btn" style="color:var(--yellow)" onclick="saveToFile()">💾 存檔</button>
+        <button class="sys-btn" style="color:var(--orange)" onclick="toggleSettings()">⚙️ 調校</button>
+        <button class="sys-btn" style="color:var(--yellow)" onclick="saveToFile()">💾 備份</button>
         <button class="sys-btn" onclick="triggerFileInput()">📂 讀取</button>
         <button class="sys-btn" style="color:var(--red)" onclick="deleteBtn()">🗑 刪除</button>
         <input type="file" id="fileIn" style="display:none" onchange="importJSON(this)" accept=".json">
     </div>
 
     <div class="footer">
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-            <button class="circle-btn btn-side" style="color:var(--purple)" onclick="startSpeech('rename')">🎙 改名</button>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button id="btn-rename" class="circle-btn btn-side" style="color:var(--purple)" onclick="startSpeech('rename')">🎙 改名</button>
             <button class="circle-btn btn-side" style="color:var(--blue)" onclick="gpsBtn()">📍 定位</button>
         </div>
-        <button class="circle-btn btn-main-red" onclick="handleLightRecord('red')">🔴 紅燈</button>
-        <button class="circle-btn btn-main-green" onclick="handleLightRecord('green')">🟢 綠燈</button>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
+        
+        <button class="circle-btn btn-main-red" onclick="handleLightRecord('red')">🔴 紅燈<br>亮</button>
+        <button class="circle-btn btn-main-green" onclick="handleLightRecord('green')">🟢 綠燈<br>亮</button>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
             <button id="btn-cycle" class="circle-btn btn-side" style="color:var(--orange)">⏱ 週期</button>
             <button class="circle-btn btn-side" style="color:#888" onclick="location.reload()">🔄 刷新</button>
         </div>
     </div>
 
-    <!-- 調校面板 -->
-    <div id="settings-overlay">
-        <h2>系統參數調校</h2>
-        <label>按鍵反應補償 (秒): <input type="number" id="cfg-offset" class="setting-input" step="0.1"></label>
-        <label>偵測半徑 (公尺): <input type="number" id="cfg-radius" class="setting-input"></label>
-        <label>語音語速 (0.5-2.0): <input type="number" id="cfg-rate" class="setting-input" step="0.1"></label>
-        <button class="sys-btn" style="height:50px; background:var(--blue); margin-top:20px;" onclick="saveConfig()">儲存並應用</button>
-        <button class="sys-btn" style="height:50px; margin-top:10px;" onclick="toggleSettings()">取消</button>
-    </div>
+    <div id="map-overlay" style="padding:0;"><div id="map" style="width:100%; height:85%;"></div><button class="sys-btn" style="height:15%; background:var(--red); font-size:1.5rem;" onclick="toggleMap()">返回</button></div>
+    <div id="settings-overlay"><h2>系統調校</h2><label>反應補償(秒): <input type="number" id="cfg-offset" style="width:100%; padding:10px; background:#222; color:#fff; border:1px solid #444;" step="0.1"></label><button class="sys-btn" style="height:50px; background:var(--blue); margin-top:20px;" onclick="saveConfig()">儲存</button></div>
 
-    <!-- 地圖面板 -->
-    <div id="map-overlay" style="padding:0;">
-        <div id="map" style="width:100%; height:85%;"></div>
-        <button class="sys-btn" style="height:15%; background:var(--red); font-size:1.5rem;" onclick="toggleMap()">離開地圖</button>
-    </div>
-
-    <audio id="silent-audio" loop src="https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3"></audio>
     <audio id="sound-beep" src="https://actions.google.com/sounds/v1/ui/beep_short.ogg"></audio>
 
 <script>
-    const MASTER_KEY = 'TRAFFIC_MASTER_V50';
-    const CONFIG_KEY = 'TRAFFIC_CONFIG_V50';
-
-    let config = JSON.parse(localStorage.getItem(CONFIG_KEY)) || { offset: 0.5, radius: 50, voiceRate: 1.4 };
-    let records = JSON.parse(localStorage.getItem(MASTER_KEY)) || [];
-    let globalCounter = parseInt(localStorage.getItem('TRAFFIC_ID_V50')) || 1;
+    const MASTER_KEY = 'TRAFFIC_MASTER_DB_V57';
+    let junctions = JSON.parse(localStorage.getItem(MASTER_KEY)) || [];
+    let globalCounter = junctions.length > 0 ? Math.max(...junctions.map(j => j.sn)) + 1 : 1;
+    let config = JSON.parse(localStorage.getItem('TRAFFIC_CFG')) || { offset: 0.5, radius: 50, voiceRate: 1.4 };
+    
     let selectedIndex = -1, userPos = { lat: 0, lon: 0 }, currentHeading = 0, predictTimer = null;
-    let leafletMap, mapMarkers = [], userMarker;
+    let leafletMap, mapMarkers = [];
 
-    // --- 全版本資料整合 (Migration) ---
-    function performMigration() {
-        const oldKeys = ['TRAFFIC_MASTER_V49', 'TRAFFIC_MASTER_V48', 'TRAFFIC_MASTER_V46', 'TRAFFIC_PERMANENT_DATA'];
-        let migrated = false;
-        if(records.length === 0) {
-            oldKeys.forEach(key => {
-                const oldData = localStorage.getItem(key);
-                if(oldData && !migrated) {
-                    const parsed = JSON.parse(oldData);
-                    records = Array.isArray(parsed) ? parsed : (parsed.records || []);
-                    globalCounter = records.length > 0 ? Math.max(...records.map(r => r.sn)) + 1 : 1;
-                    migrated = true;
-                    saveData();
-                }
-            });
-        }
-    }
-    performMigration();
+    function speak(t) { if(!window.speechSynthesis) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang='zh-TW'; u.volume=1.0; u.rate=config.voiceRate; window.speechSynthesis.speak(u); }
+    function startService() { if ('speechSynthesis' in window) window.speechSynthesis.resume(); }
 
-    // --- 啟動服務 (含 iOS 方位授權) ---
-    function initService() {
-        if ('speechSynthesis' in window) window.speechSynthesis.resume();
-        document.getElementById('silent-audio').play().catch(()=>{});
-        
-        // iOS 羅盤權限請求
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            DeviceOrientationEvent.requestPermission().catch(e => console.log(e));
-        }
-
-        if(document.getElementById('display-name').innerText === "等待系統啟動") {
-            document.getElementById('display-name').innerText = "尋找路口中";
-            speak("導航紀錄系統已就緒");
-        }
-    }
-
-    function speak(t, cb) {
-        if(!window.speechSynthesis) return;
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(t);
-        u.lang = 'zh-TW'; u.volume = 1.0; u.rate = config.voiceRate;
-        if(cb) u.onend = cb;
-        window.speechSynthesis.speak(u);
-    }
-
-    // --- 核心紀錄功能 ---
+    // --- 核心邏輯：按鍵處理 ---
     function handleLightRecord(type) {
         document.getElementById('sound-beep').play().catch(()=>{});
-        const syncTime = Date.now() - (config.offset * 1000);
+        const now = Date.now() - (config.offset * 1000);
         
-        let nearestIdx = -1;
-        records.forEach((r, i) => {
-            if (calcDist(userPos.lat, userPos.lon, r.lat, r.lon) < (config.radius + 20)) nearestIdx = i;
+        // 1. 檢查 50m 內是否有路口 (且方位相近)
+        let matchIdx = -1;
+        junctions.forEach((j, i) => {
+            const d = calcDist(userPos.lat, userPos.lon, j.lat, j.lon);
+            const aDiff = Math.abs(j.heading - currentHeading);
+            if (d < config.radius && (aDiff < 60 || aDiff > 300)) matchIdx = i;
         });
 
-        if (nearestIdx === -1) {
-            records.push({ sn: globalCounter++, name: "新路口", lat: userPos.lat, lon: userPos.lon, heading: currentHeading, cycleTime: 60000, lastSync: syncTime, lastSyncType: type });
-            selectedIndex = records.length - 1;
-            speak("紀錄新路口");
+        if (matchIdx === -1) {
+            // 情況 A: 沒找到路口 -> 抓 GPS 建立新定位點
+            const newJ = {
+                sn: globalCounter++,
+                name: "新定位點",
+                lat: userPos.lat,
+                lon: userPos.lon,
+                heading: currentHeading,
+                manualCycle: null,
+                calculatedCycle: null,
+                lastSync: now,
+                lastSyncType: type,
+                logs: [{ type: type, time: now }]
+            };
+            junctions.push(newJ);
+            selectedIndex = junctions.length - 1;
+            speak("已建立新路口定位點");
         } else {
-            selectedIndex = nearestIdx;
-            records[selectedIndex].lastSync = syncTime;
-            records[selectedIndex].lastSyncType = type;
-            speak("時間同步");
+            // 情況 B: 已經有路口 -> 只紀錄時間，不重抓座標
+            selectedIndex = matchIdx;
+            const j = junctions[selectedIndex];
+            j.lastSync = now;
+            j.lastSyncType = type;
+            j.logs.push({ type: type, time: now });
+            
+            // 樣本管理：保留最近 30 筆供電腦計算
+            if (j.logs.length > 30) j.logs.shift();
+            
+            analyzeSamples(selectedIndex);
+            speak("已錄入" + j.name + "時間樣本");
         }
+        
         saveData(); renderHistory(); startPredict();
     }
 
+    // --- 電腦分析樣本算週期 ---
+    function analyzeSamples(idx) {
+        const j = junctions[idx];
+        if (j.logs.length < 2) return;
+
+        // 邏輯：尋找「同色亮」的精確週期 (例如：紅亮 到 下次紅亮)
+        for (let i = j.logs.length - 1; i >= 1; i--) {
+            for (let k = i - 1; k >= 0; k--) {
+                if (j.logs[i].type === j.logs[k].type) {
+                    const diff = j.logs[i].time - j.logs[k].time;
+                    // 合理週期判定 (20秒~5分鐘)
+                    if (diff >= 20000 && diff <= 300000) {
+                        j.calculatedCycle = Math.round(diff / 1000) * 1000;
+                        return;
+                    }
+                }
+            }
+        }
+        // 備援邏輯：尋找紅綠交替時間 (假設紅綠等長)
+        const last = j.logs[j.logs.length-1];
+        const prev = j.logs[j.logs.length-2];
+        if (last.type !== prev.type) {
+            j.calculatedCycle = Math.round((last.time - prev.time) * 2 / 1000) * 1000;
+        }
+    }
+
+    // --- 24小時預算倒數 ---
     function startPredict() {
         if (predictTimer) clearInterval(predictTimer);
         predictTimer = setInterval(() => {
             if (selectedIndex === -1) return;
-            const rec = records[selectedIndex]; if (!rec.lastSync) return;
-            const now = Date.now();
-            const elapsed = (now - rec.lastSync) % rec.cycleTime;
-            const remainMs = rec.cycleTime - elapsed;
-            const remainSec = Math.ceil(remainMs / 1000);
+            const j = junctions[selectedIndex];
+            const cycle = j.manualCycle || j.calculatedCycle;
             
-            const nextChangeTs = now + remainMs;
-            const nextTimeStr = new Date(nextChangeTs).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            if (!cycle || !j.lastSync) {
+                document.getElementById('countdown').innerText = "--";
+                document.getElementById('countdown-label').innerText = "等待採樣...";
+                return;
+            }
 
-            document.getElementById('countdown').innerText = remainSec;
-            document.getElementById('next-change-time').innerText = `預計 ${nextTimeStr} 轉燈`;
+            const now = Date.now();
+            const elapsed = (now - j.lastSync) % cycle;
+            const remain = Math.ceil((cycle - elapsed) / 1000);
+            
+            // 根據最後一次按鍵相位判斷當前顏色
+            const isFirstPhase = elapsed < (cycle / 2);
+            const curColor = isFirstPhase ? j.lastSyncType : (j.lastSyncType === 'red' ? 'green' : 'red');
+            
+            const timerEl = document.getElementById('countdown');
+            timerEl.innerText = remain;
+            timerEl.style.color = (curColor === 'red' ? 'var(--red)' : 'var(--green)');
+            document.getElementById('countdown-label').innerText = (curColor === 'red' ? '🔴 紅燈' : '🟢 綠燈') + "預測中";
 
-            const isFirst = elapsed < (rec.cycleTime / 2);
-            const activeColor = (rec.lastSyncType === 'red') ? (isFirst ? "var(--red)" : "var(--green)") : (isFirst ? "var(--green)" : "var(--red)");
-            document.getElementById('countdown').style.color = activeColor;
-
-            if (remainSec <= 10) {
+            if (remain <= 10) {
                 document.getElementById('main-card').classList.add('flashing');
-                if (remainSec === 10) speak("剩十秒");
+                if (remain === 10) speak("剩十秒");
             } else document.getElementById('main-card').classList.remove('flashing');
         }, 1000);
     }
@@ -198,147 +215,90 @@
     function initGPS() {
         navigator.geolocation.watchPosition((pos) => {
             userPos.lat = pos.coords.latitude; userPos.lon = pos.coords.longitude;
-            document.getElementById('gps-info').innerText = `GPS 就緒 (精度:${Math.round(pos.coords.accuracy)}m)`;
+            document.getElementById('gps-info').innerText = `GPS 定位成功 (${Math.round(pos.coords.accuracy)}m)`;
             autoDetect();
-            if(leafletMap && userMarker) userMarker.setLatLng([userPos.lat, userPos.lon]);
         }, null, { enableHighAccuracy: true });
     }
 
     function autoDetect() {
         let nearestIdx = -1; let minD = 999;
-        const earlyR = config.radius + 30;
-        records.forEach((r, i) => {
-            const d = calcDist(userPos.lat, userPos.lon, r.lat, r.lon);
-            if (d < earlyR && d < minD) { nearestIdx = i; minD = d; }
+        const earlyR = config.radius + 30; 
+        junctions.forEach((j, i) => {
+            const d = calcDist(userPos.lat, userPos.lon, j.lat, j.lon);
+            const aDiff = Math.abs(j.heading - currentHeading);
+            if (d < earlyR && d < minD && (aDiff < 60 || aDiff > 300)) { nearestIdx = i; minD = d; }
         });
         if (nearestIdx !== -1) {
             if (selectedIndex !== nearestIdx) {
                 selectedIndex = nearestIdx;
-                speak("抵達 " + records[selectedIndex].name);
+                speak("抵達 " + junctions[selectedIndex].name);
                 renderHistory(); startPredict();
             }
-        } else if (selectedIndex !== -1 && minD > (config.radius + 60)) {
+        } else if (selectedIndex !== -1 && minD > (config.radius + 70)) {
             selectedIndex = -1; renderHistory(); if(predictTimer) clearInterval(predictTimer);
         }
     }
 
-    window.addEventListener('deviceorientationabsolute', (e) => { 
-        currentHeading = e.webkitCompassHeading || (360 - e.alpha);
-        if(selectedIndex === -1) document.getElementById('next-change-time').innerText = `方位: ${Math.round(currentHeading)}°`;
-    }, true);
-
-    function calcDist(la1, lo1, la2, lo2) {
-        const R = 6371e3;
-        const dLa = (la2-la1)*Math.PI/180, dLo = (lo2-lo1)*Math.PI/180;
-        const a = Math.sin(dLa/2)**2 + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    }
-
-    // --- 備份與匯入修復 ---
-    function triggerFileInput() { document.getElementById('fileIn').click(); }
-    function importJSON(input) {
-        const file = input.files[0]; if(!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const imported = JSON.parse(e.target.result);
-                let newRecords = Array.isArray(imported) ? imported : (imported.records || []);
-                if (newRecords.length > 0) {
-                    records = newRecords;
-                    globalCounter = Math.max(...records.map(r => r.sn)) + 1;
-                    saveData();
-                    speak("匯入成功");
-                    setTimeout(() => location.reload(), 1000);
-                }
-            } catch(err) { alert("檔案讀取失敗，請確認 JSON 格式"); }
-        };
-        reader.readAsText(file);
-    }
-
-    function saveToFile() {
-        const blob = new Blob([JSON.stringify({records, globalCounter, config}, null, 4)], { type: "application/json" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `traffic_v50_backup.json`;
-        a.click();
-    }
-
-    // --- 地圖加強 (新增個人圓點) ---
-    function toggleMap() {
-        const el = document.getElementById('map-overlay');
-        if (el.style.display !== 'flex') {
-            el.style.display = 'flex';
-            if (!leafletMap) {
-                leafletMap = L.map('map').setView([userPos.lat || 25, userPos.lon || 121], 16);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(leafletMap);
-                userMarker = L.circleMarker([userPos.lat, userPos.lon], { color: 'var(--blue)', radius: 8, fillOpacity: 0.8 }).addTo(leafletMap).bindPopup("你的位置");
-                leafletMap.on('click', (e) => {
-                    const name = prompt("地圖加點名稱:"); if(!name) return;
-                    records.push({ sn: globalCounter++, name, lat: e.latlng.lat, lon: e.latlng.lng, heading: 0, cycleTime: 60000, lastSync: 0, lastSyncType: 'red' });
-                    saveData(); renderMarkers(); renderHistory();
-                });
-            }
-            renderMarkers();
-        } else el.style.display = 'none';
-    }
-    function renderMarkers() {
-        mapMarkers.forEach(m => leafletMap.removeLayer(m));
-        records.forEach(r => mapMarkers.push(L.marker([r.lat, r.lon]).addTo(leafletMap).bindPopup(r.name)));
-    }
-
-    // --- 語音紀錄補強 ---
-    const Recog = window.webkitSpeechRecognition || window.SpeechRecognition;
-    let recog = Recog ? new Recog() : null;
-    let speechMode = '';
-    if(recog) {
-        recog.lang = 'zh-TW';
-        recog.onresult = (e) => {
-            const res = e.results[0][0].transcript.trim();
-            if (speechMode === 'rename' && selectedIndex !== -1) { records[selectedIndex].name = res; speak("改名為" + res); }
-            else if (speechMode === 'cycle' && selectedIndex !== -1) {
-                const n = res.match(/\d+/); if(n) { records[selectedIndex].cycleTime = parseInt(n[0])*1000; speak("週期"+n[0]+"秒"); }
-            }
-            saveData(); renderHistory();
-        };
-        recog.onend = () => document.getElementById('btn-cycle').classList.remove('mic-active');
-    }
-    function startSpeech(mode) { speechMode = mode; speak(mode === 'rename' ? "路名" : "秒數"); setTimeout(() => recog.start(), 1000); }
-
-    const cycleBtn = document.getElementById('btn-cycle');
-    let pressTimer;
-    cycleBtn.addEventListener('touchstart', () => { pressTimer = window.setTimeout(() => {
-        if(selectedIndex===-1) return;
-        const input = prompt("手動循環秒數:", records[selectedIndex].cycleTime / 1000);
-        if(input) { records[selectedIndex].cycleTime = parseInt(input) * 1000; saveData(); renderHistory(); speak("週期已修正"); startPredict(); }
-        pressTimer = null;
-    }, 600); });
-    cycleBtn.addEventListener('touchend', () => { if(pressTimer) { clearTimeout(pressTimer); startSpeech('cycle'); } });
-
+    // --- UI 渲染 ---
     function renderHistory() {
         const list = document.getElementById('history-list'); list.innerHTML = '';
-        records.slice().reverse().forEach((r) => {
-            const idx = records.indexOf(r);
+        junctions.slice().reverse().forEach((j) => {
+            const idx = junctions.indexOf(j);
             const item = document.createElement('div');
             item.className = `history-item ${selectedIndex === idx ? 'selected' : ''}`;
-            item.onclick = () => { selectedIndex = idx; speak(r.name); renderHistory(); startPredict(); };
-            item.innerHTML = `<span>#${r.sn} <b>${r.name}</b></span><span>${r.cycleTime/1000}s</span>`;
+            item.onclick = () => { selectedIndex = idx; speak(j.name); renderHistory(); startPredict(); };
+            
+            const manualText = j.manualCycle ? (j.manualCycle/1000 + 's') : '空白';
+            const compText = j.calculatedCycle ? (j.calculatedCycle/1000 + 's') : '計算中';
+
+            item.innerHTML = `
+                <div class="h-info">
+                    <span>#${j.sn} <b>${j.name}</b></span>
+                    <span class="h-stats">樣本數: ${j.logs.length} | 方位: ${Math.round(j.heading)}°</span>
+                </div>
+                <div class="h-cycle-box">
+                    <span style="color:#666">手動: ${manualText}</span><br>
+                    <span style="color:var(--green)">電腦: ${compText}</span>
+                </div>
+            `;
             list.appendChild(item);
         });
-        if (selectedIndex !== -1) document.getElementById('display-name').innerText = records[selectedIndex].name;
+        if (selectedIndex !== -1) document.getElementById('display-name').innerText = junctions[selectedIndex].name;
     }
 
-    function saveData() { localStorage.setItem(MASTER_KEY, JSON.stringify(records)); localStorage.setItem('TRAFFIC_ID_V50', globalCounter); }
-    function toggleSettings() { const el = document.getElementById('settings-overlay'); el.style.display = (el.style.display==='flex')?'none':'flex'; if(el.style.display==='flex'){ document.getElementById('cfg-offset').value=config.offset; document.getElementById('cfg-radius').value=config.radius; document.getElementById('cfg-rate').value=config.voiceRate; } }
-    function saveConfig() { config.offset = parseFloat(document.getElementById('cfg-offset').value); config.radius = parseInt(document.getElementById('cfg-radius').value); config.voiceRate = parseFloat(document.getElementById('cfg-rate').value); localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); speak("已存檔"); toggleSettings(); }
-    function gpsBtn() { if(selectedIndex!==-1){ records[selectedIndex].lat=userPos.lat; records[selectedIndex].lon=userPos.lon; saveData(); speak("定位更新"); renderHistory(); } }
-    function deleteBtn() { if(selectedIndex!==-1 && confirm("刪除？")){ records.splice(selectedIndex,1); selectedIndex=-1; saveData(); location.reload(); } }
-    function testAudioBtn() { speak(`測試。音量與背景服務已就緒。目前補償為${config.offset}秒，偵測半徑為${config.radius}公尺。`); }
+    // --- 其他功能 (改名、週期、地圖、存檔) ---
+    function manualRename() { if(selectedIndex===-1) return; const n = prompt("修改路口名稱:", junctions[selectedIndex].name); if(n){ junctions[selectedIndex].name=n; saveData(); renderHistory(); } }
+    function startSpeech(mode) {
+        const Recog = window.webkitSpeechRecognition || window.SpeechRecognition;
+        if(!Recog) return; let r = new Recog(); r.lang = 'zh-TW';
+        r.onresult = (e) => {
+            const res = e.results[0][0].transcript;
+            if(mode === 'rename') { junctions[selectedIndex].name = res; speak("名稱已更新"); }
+            else { const n = res.match(/\d+/); if(n) { junctions[selectedIndex].manualCycle = parseInt(n[0])*1000; speak("手動週期已設定"); } }
+            saveData(); renderHistory();
+        };
+        speak(mode==='rename'?"請說路名":"請說循環秒數");
+        setTimeout(()=>r.start(), 1000);
+    }
+    const cycleBtn = document.getElementById('btn-cycle');
+    let pressTimer;
+    cycleBtn.addEventListener('touchstart', () => { pressTimer = window.setTimeout(() => { if(selectedIndex===-1) return; const i = prompt("手動輸入循環秒數:", junctions[selectedIndex].cycleTime/1000); if(i){ junctions[selectedIndex].manualCycle=parseInt(i)*1000; saveData(); renderHistory(); startPredict(); } pressTimer=null; }, 600); });
+    cycleBtn.addEventListener('touchend', () => { if(pressTimer) { clearTimeout(pressTimer); startSpeech('cycle'); } });
 
-    window.onload = () => {
-        initGPS();
-        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW',{hour12:false}); }, 1000);
-        renderHistory();
-    };
+    function calcDist(la1, lo1, la2, lo2) { const R = 6371e3; const dLa = (la2-la1)*Math.PI/180, dLo = (lo2-lo1)*Math.PI/180; const a = Math.sin(dLa/2)**2 + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLon/2)**2; return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }
+    window.addEventListener('deviceorientationabsolute', (e) => { currentHeading = e.webkitCompassHeading || (360 - e.alpha); }, true);
+    function saveData() { localStorage.setItem(MASTER_KEY, JSON.stringify(junctions)); }
+    function gpsBtn() { if(selectedIndex!==-1){ junctions[selectedIndex].lat=userPos.lat; junctions[selectedIndex].lon=userPos.lon; speak("座標已修正"); saveData(); renderHistory(); } }
+    function deleteBtn() { if(selectedIndex!==-1 && confirm("刪除？")){ junctions.splice(selectedIndex,1); selectedIndex=-1; saveData(); location.reload(); } }
+    function saveToFile() { const blob = new Blob([JSON.stringify({records: junctions, config})], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `traffic_v57_data.json`; a.click(); speak("檔案已導出"); }
+    function importJSON(i) { const r = new FileReader(); r.onload = (e) => { const d = JSON.parse(e.target.result); junctions = d.records || d; saveData(); location.reload(); }; r.readAsText(i.files[0]); }
+    function triggerFileInput() { document.getElementById('fileIn').click(); }
+    function toggleSettings() { const el = document.getElementById('settings-overlay'); el.style.display = (el.style.display==='flex')?'none':'flex'; if(el.style.display==='flex') document.getElementById('cfg-offset').value = config.offset; }
+    function saveConfig() { config.offset = parseFloat(document.getElementById('cfg-offset').value); localStorage.setItem('TRAFFIC_CFG', JSON.stringify(config)); speak("設定已儲存"); toggleSettings(); }
+    function toggleMap() { const el = document.getElementById('map-overlay'); el.style.display = (el.style.display==='flex')?'none':'flex'; if(el.style.display==='flex' && !leafletMap) { leafletMap = L.map('map').setView([userPos.lat, userPos.lon], 16); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(leafletMap); } renderMarkers(); }
+    function renderMarkers() { mapMarkers.forEach(m => leafletMap.removeLayer(m)); junctions.forEach(j => mapMarkers.push(L.marker([j.lat, j.lon]).addTo(leafletMap).bindPopup(j.name))); }
+
+    window.onload = () => { initGPS(); setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW',{hour12:false}); }, 1000); renderHistory(); };
 </script>
 </body>
 </html>
