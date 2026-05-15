@@ -2,345 +2,248 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Traffic Pro V64 - 終極修復版</title>
-    <!-- Leaflet 資源 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Traffic Lite V66</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        :root { --bg: #000; --card-bg: #111; --red: #ff3b30; --green: #4cd964; --yellow: #ffcc00; --blue: #007aff; --purple: #af52de; --orange: #ff9500; --text: #fff; }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { background-color: var(--bg); color: var(--text); margin: 0; padding: 8px; height: 100dvh; display: flex; flex-direction: column; font-family: system-ui, sans-serif; overflow: hidden; }
+        :root { --bg: #000; --card: #111; --red: #ff3b30; --green: #4cd964; --yellow: #ffcc00; --blue: #007aff; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: sans-serif; }
+        body { background: var(--bg); color: #fff; margin: 0; padding: 8px; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
         
-        .header { height: 8%; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 1px solid #222; }
-        #clock { font-size: 1.4rem; font-weight: 800; font-family: monospace; }
-        #debug-console { font-size: 0.6rem; color: var(--blue); height: 15px; text-align: center; }
+        /* 頂部時鐘 */
+        .header { height: 10%; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 1px solid #222; }
+        #clock { font-size: 1.5rem; font-weight: bold; font-family: monospace; }
+        #gps-status { font-size: 0.6rem; color: var(--blue); }
 
-        /* 主儀表顯示 */
-        .active-card { height: 26%; display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 5px 0; background: var(--card-bg); border-radius: 25px; border: 2px solid #333; position: relative; transition: 0.3s; }
-        .active-card.in-range { border-color: var(--blue); border-width: 3px; }
-        .active-card.flashing { animation: warning-pulse 1s infinite; border-color: var(--yellow); }
-        @keyframes warning-pulse { 0%, 100% { background: #111; } 50% { background: #332200; } }
+        /* 主顯示儀表 */
+        .active-card { height: 35%; display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 10px 0; background: var(--card); border-radius: 20px; border: 2px solid #333; position: relative; }
+        .flashing { animation: pulse 1s infinite; border-color: var(--yellow); }
+        @keyframes pulse { 0%, 100% { background: #111; } 50% { background: #320; } }
         
-        #display-name { font-size: 1.6rem; font-weight: 900; color: var(--yellow); text-align:center; padding:5px 15px; }
-        #countdown-label { font-size: 0.9rem; font-weight: bold; margin-top: 5px; }
-        #countdown { font-size: 4.5rem; font-weight: 900; color: #fff; font-family: monospace; line-height: 1; }
+        #display-name { font-size: 1.8rem; font-weight: 900; color: var(--yellow); }
+        #countdown { font-size: 6rem; font-weight: 900; color: #fff; font-family: monospace; line-height: 1; }
+        #next-change { font-size: 0.9rem; color: #888; margin-top: 5px; }
 
-        /* 滑動歷史 */
-        .history-container { flex: 1; overflow-y: auto; margin-bottom: 8px; background: #080808; border-radius: 15px; border: 1px solid #222; }
-        .history-item { padding: 12px 15px; border-bottom: 1px solid #1a1a1a; display: flex; justify-content: space-between; font-size: 0.8rem; align-items: center; }
-        .history-item.selected { background: #1a1a00; border-left: 4px solid var(--yellow); }
-
-        /* 管理按鈕 */
-        .sys-panel { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 8px; }
-        .sys-btn { background: #151515; border: 1px solid #333; color: #fff; padding: 10px 0; border-radius: 8px; font-size: 0.55rem; font-weight: bold; cursor: pointer; }
+        /* 系統按鈕 */
+        .sys-panel { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-bottom: 10px; }
+        .sys-btn { background: #222; border: 1px solid #333; color: #fff; padding: 10px 0; border-radius: 8px; font-size: 0.6rem; font-weight: bold; }
         
-        /* 底部操作 */
-        .footer { height: 28%; display: grid; grid-template-columns: 1fr 1.5fr 1fr; align-items: center; justify-items: center; padding-bottom: env(safe-area-inset-bottom, 10px); }
-        .circle-btn { border: none; border-radius: 50%; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #fff; cursor: pointer; box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
-        .btn-main-red { width: 100px; height: 100px; background: linear-gradient(135deg, var(--red), #800); font-size: 1rem; font-weight: 900; }
-        .btn-main-green { width: 100px; height: 100px; background: linear-gradient(135deg, var(--green), #060); font-size: 1rem; font-weight: 900; }
-        .btn-side { width: 60px; height: 60px; background: #222; border: 1px solid #444; font-size: 0.6rem; font-weight: bold; }
+        /* 歷史清單 (僅保留簡單顯示) */
+        #history-list { flex: 1; overflow-y: auto; background: #080808; border-radius: 10px; margin-bottom: 10px; }
+        .history-item { padding: 10px; border-bottom: 1px solid #1a1a1a; display: flex; justify-content: space-between; font-size: 0.8rem; }
+        .selected { background: #1a1a00; border-left: 4px solid var(--yellow); }
 
-        /* 面板遮罩 */
-        #map-overlay, #settings-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 10001; display: none; padding: 20px; flex-direction: column; }
-        .mic-active { background: #fff !important; color: #000 !important; animation: mic-glow 1s infinite; }
-        @keyframes mic-glow { 50% { box-shadow: 0 0 20px #fff; } }
+        /* 底部圓鈕 */
+        .footer { height: 25%; display: grid; grid-template-columns: 1fr 1.5fr 1fr; align-items: center; justify-items: center; padding-bottom: 10px; }
+        .circle-btn { border: none; border-radius: 50%; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #fff; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .btn-red { width: 100px; height: 100px; background: linear-gradient(135deg, var(--red), #800); font-size: 1.1rem; font-weight: bold; }
+        .btn-green { width: 100px; height: 100px; background: linear-gradient(135deg, var(--green), #060); font-size: 1.1rem; font-weight: bold; }
+        .btn-side { width: 60px; height: 60px; background: #222; border: 1px solid #444; font-size: 0.65rem; }
+
+        #map-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; display: none; }
     </style>
 </head>
-<body onclick="startAppService()">
+<body onclick="unlock()">
 
     <div class="header">
         <div id="clock">00:00:00</div>
-        <div id="debug-console">等待啟動 - 請點擊螢幕</div>
+        <div id="gps-status">點擊螢幕啟動系統</div>
     </div>
 
     <div class="active-card" id="main-card">
-        <div id="display-name" onclick="manualRename()">尋找定位點</div>
-        <div id="countdown-label">--</div>
+        <div id="display-name" onclick="manualRename()">尋找路口中</div>
         <div id="countdown">--</div>
+        <div id="next-change">請按紅/綠鈕紀錄</div>
     </div>
 
-    <div class="history-container" id="history-list"></div>
+    <div id="history-list"></div>
 
     <div class="sys-panel">
-        <button class="sys-btn" style="color:var(--blue)" onclick="toggleMap()">🗺 地圖</button>
-        <button class="sys-btn" style="color:var(--green)" onclick="testAudio()">🔊 測試</button>
-        <button class="sys-btn" style="color:var(--orange)" onclick="toggleSettings()">⚙️ 調校</button>
-        <button class="sys-btn" style="color:var(--yellow)" onclick="saveToFile()">💾 備份</button>
-        <button class="sys-btn" onclick="triggerFileInput()">📂 讀取</button>
-        <input type="file" id="fileIn" style="display:none" onchange="importJSON(this)" accept=".json">
+        <button class="sys-btn" onclick="toggleMap()">🗺地圖</button>
+        <button class="sys-btn" onclick="saveData()">💾存檔</button>
+        <button class="sys-btn" onclick="document.getElementById('fIn').click()">📂讀取</button>
+        <button class="sys-btn" onclick="speak('測試成功')">🔊測試</button>
+        <button class="sys-btn" style="color:var(--red)" onclick="deleteJ()">🗑刪除</button>
+        <input type="file" id="fIn" style="display:none" onchange="importData(this)">
     </div>
 
     <div class="footer">
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-            <button id="btn-rename" class="circle-btn btn-side" style="color:var(--purple)" onclick="startSpeech('rename')">🎙 改名</button>
-            <button class="circle-btn btn-side" style="color:var(--blue)" onclick="gpsBtn()">📍 定位</button>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <button class="circle-btn btn-side" style="color:var(--purple)" onclick="doVoice('name')">🎙改名</button>
+            <button class="circle-btn btn-side" style="color:var(--blue)" onclick="gpsFix()">📍定位</button>
         </div>
-        
-        <button class="circle-btn btn-main-red" onclick="handleLightRecord('red')">🔴 紅燈<br>亮</button>
-        <button class="circle-btn btn-main-green" onclick="handleLightRecord('green')">🟢 綠燈<br>亮</button>
-
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-            <button id="btn-cycle" class="circle-btn btn-side" style="color:var(--orange)">⏱ 週期</button>
-            <button class="circle-btn btn-side" style="color:#888" onclick="location.reload()">🔄 刷新</button>
+        <button class="circle-btn btn-red" onclick="logLight('red')">🔴紅亮</button>
+        <button class="circle-btn btn-green" onclick="logLight('green')">🟢綠亮</button>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <button class="circle-btn btn-side" style="color:var(--orange)" onclick="doVoice('cycle')">⏱週期</button>
+            <button class="circle-btn btn-side" onclick="location.reload()">🔄刷新</button>
         </div>
     </div>
 
-    <div id="map-overlay" style="padding:0;">
+    <div id="map-overlay">
         <div id="map" style="width:100%; height:85%;"></div>
-        <button class="sys-btn" style="height:15%; background:var(--red); font-size:1.5rem; border-radius:0;" onclick="toggleMap()">返回主畫面</button>
+        <button onclick="toggleMap()" style="width:100%; height:15%; background:var(--red); color:#fff; border:none; font-size:1.5rem;">返回</button>
     </div>
 
-    <div id="settings-overlay">
-        <h2 style="color:var(--orange)">系統調校</h2>
-        <label>補償: <input type="number" id="cfg-offset" step="0.1" style="width:100%; padding:15px; margin:10px 0; background:#222; color:#fff; border:1px solid #444;"></label>
-        <button class="sys-btn" style="height:60px; background:var(--blue); font-size:1.2rem;" onclick="saveConfig()">儲存</button>
-        <button class="sys-btn" style="height:50px; margin-top:10px;" onclick="toggleSettings()">關閉</button>
-    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const DB_KEY = 'TRAFFIC_LITE_DB';
+        let junctions = JSON.parse(localStorage.getItem(DB_KEY)) || [];
+        let globalCounter = junctions.length > 0 ? Math.max(...junctions.map(j => j.sn || 0)) + 1 : 1;
+        let userPos = { lat: 0, lon: 0 }, selectedIndex = -1, predictTimer = null;
 
-    <audio id="silent-audio" loop src="https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3"></audio>
-    <audio id="sound-beep" src="https://actions.google.com/sounds/v1/ui/beep_short.ogg"></audio>
-
-<script>
-    // --- 強制穩定標籤 ---
-    const STORAGE_KEY = 'TRAFFIC_MASTER_V64_FINAL'; 
-    let junctions = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-    let config = JSON.parse(localStorage.getItem('TRAFFIC_CFG')) || { offset: 0.5, radius: 50, voiceRate: 1.4 };
-    let globalCounter = junctions.length > 0 ? Math.max(...junctions.map(j => j.sn)) + 1 : 1;
-    
-    let selectedIndex = -1, userPos = { lat: 23.6, lon: 120.9 }, currentHeading = 0, predictTimer = null;
-    let leafletMap = null, mapMarkers = [], userMarker = null;
-
-    function log(msg) { document.getElementById('debug-console').innerText = msg; console.log(msg); }
-    function speak(t) { if(!window.speechSynthesis) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang='zh-TW'; u.volume=1.0; u.rate=config.voiceRate; window.speechSynthesis.speak(u); }
-
-    // --- 啟動與權限修復 ---
-    async function startAppService() {
-        if(window.speechSynthesis.paused) window.speechSynthesis.resume();
-        document.getElementById('silent-audio').play().catch(()=>{});
-        
-        if(document.getElementById('display-name').innerText === "點擊畫面開始" || document.getElementById('display-name').innerText === "等待系統啟動") {
-            document.getElementById('display-name').innerText = "啟動中...";
-            speak("程式已啟動");
-            
-            // 請求權限
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                try { await DeviceOrientationEvent.requestPermission(); } catch(e) { log("羅盤權限拒絕"); }
-            }
-            
-            initGPS();
-            initCompass();
-            renderHistory();
+        function speak(t) { 
+            const u = new SpeechSynthesisUtterance(t); 
+            u.lang = 'zh-TW'; u.rate = 1.5; 
+            window.speechSynthesis.cancel(); 
+            window.speechSynthesis.speak(u); 
         }
-    }
 
-    // --- 匯入修復邏輯 ---
-    function importJSON(input) {
-        const file = input.files[0];
-        if(!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-                // 智慧相容多版本結構
-                let importedRecords = data.records || data;
-                if (!Array.isArray(importedRecords)) throw new Error("無效資料格式");
-
-                junctions = importedRecords;
-                globalCounter = Math.max(...junctions.map(j => j.sn || 0)) + 1;
-                saveData();
-                speak("讀取成功，正在重啟");
-                setTimeout(() => location.reload(), 1500);
-            } catch(e) {
-                alert("檔案讀取失敗，請確認是否為 JSON 格式備份。");
-                log("匯入失敗: " + e.message);
+        function unlock() {
+            if(document.getElementById('gps-status').innerText.includes("點擊")) {
+                document.getElementById('gps-status').innerText = "定位中...";
+                speak("程式已啟動");
+                initGPS();
             }
-        };
-        reader.readAsText(file);
-    }
+        }
 
-    // --- 核心紀錄採樣 ---
-    function handleLightRecord(type) {
-        document.getElementById('sound-beep').play().catch(()=>{});
-        const syncTime = Date.now() - (config.offset * 1000);
-        let matchIdx = -1;
+        function logLight(type) {
+            const now = Date.now() - 500;
+            let match = junctions.findIndex(j => calcDist(userPos.lat, userPos.lon, j.lat, j.lon) < 50);
+            
+            if (match === -1) {
+                junctions.push({ sn: globalCounter++, name: "新路口", lat: userPos.lat, lon: userPos.lon, cycle: 60000, last: now, lastType: type, logs: [{type, time: now}] });
+                selectedIndex = junctions.length - 1;
+                speak("建立路口");
+            } else {
+                selectedIndex = match;
+                junctions[match].last = now;
+                junctions[match].lastType = type;
+                junctions[match].logs.push({type, time: now});
+                if(junctions[match].logs.length > 10) junctions[match].logs.shift();
+                autoCalc(match);
+                speak("已同步");
+            }
+            save(); render(); startPredict();
+        }
 
-        junctions.forEach((j, i) => {
-            const d = calcDist(userPos.lat, userPos.lon, j.lat, j.lon);
-            if (d < config.radius) matchIdx = i;
-        });
+        function autoCalc(idx) {
+            const j = junctions[idx]; if (j.logs.length < 2) return;
+            for (let i = j.logs.length-1; i>=1; i--) {
+                for (let k = i-1; k>=0; k--) {
+                    if (j.logs[i].type === j.logs[k].type) {
+                        const d = j.logs[i].time - j.logs[k].time;
+                        if (d >= 20000 && d <= 300000) { j.cycle = d; return; }
+                    }
+                }
+            }
+        }
 
-        if (matchIdx === -1) {
-            junctions.push({ 
-                sn: globalCounter++, name: "新定位點", 
-                lat: userPos.lat, lon: userPos.lon, heading: currentHeading, 
-                cycleTime: 60000, lastSync: syncTime, lastSyncType: type, 
-                logs: [{type, time: syncTime}] 
+        function startPredict() {
+            if (predictTimer) clearInterval(predictTimer);
+            predictTimer = setInterval(() => {
+                if (selectedIndex === -1) return;
+                const j = junctions[selectedIndex];
+                const elapsed = (Date.now() - j.last) % j.cycle;
+                const rem = Math.ceil((j.cycle - elapsed) / 1000);
+                const isFirst = elapsed < (j.cycle / 2);
+                const curColor = isFirst ? j.lastType : (j.lastType === 'red' ? 'green' : 'red');
+                
+                document.getElementById('countdown').innerText = rem;
+                document.getElementById('countdown').style.color = (curColor === 'red' ? "var(--red)" : "var(--green)");
+                document.getElementById('next-change').innerText = `預計 ${new Date(Date.now() + (j.cycle - elapsed)).toLocaleTimeString()} 轉燈`;
+
+                if (rem <= 10) {
+                    document.getElementById('main-card').classList.add('flashing');
+                    if (rem === 10) speak("剩十秒");
+                } else document.getElementById('main-card').classList.remove('flashing');
+            }, 1000);
+        }
+
+        function initGPS() {
+            navigator.geolocation.watchPosition(p => {
+                userPos.lat = p.coords.latitude; userPos.lon = p.coords.longitude;
+                document.getElementById('gps-status').innerText = `GPS OK (${Math.round(p.coords.accuracy)}m)`;
+                autoDetect();
+            }, null, { enableHighAccuracy: true });
+        }
+
+        function autoDetect() {
+            let found = junctions.findIndex(j => calcDist(userPos.lat, userPos.lon, j.lat, j.lon) < 50);
+            if (found !== -1 && found !== selectedIndex) {
+                selectedIndex = found; speak("抵達 " + junctions[found].name); render(); startPredict();
+            } else if (found === -1 && selectedIndex !== -1) {
+                const d = calcDist(userPos.lat, userPos.lon, junctions[selectedIndex].lat, junctions[selectedIndex].lon);
+                if (d > 80) { selectedIndex = -1; render(); clearInterval(predictTimer); }
+            }
+        }
+
+        function calcDist(la1, lo1, la2, lo2) {
+            const R = 6371e3;
+            const dLa = (la2-la1)*Math.PI/180, dLo = (lo2-lo1)*Math.PI/180;
+            const a = Math.sin(dLa/2)**2 + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function save() { localStorage.setItem(DB_KEY, JSON.stringify(junctions)); }
+        function render() {
+            const list = document.getElementById('history-list'); list.innerHTML = '';
+            junctions.slice().reverse().forEach(j => {
+                const item = document.createElement('div');
+                item.className = `history-item ${junctions.indexOf(j) === selectedIndex ? 'selected' : ''}`;
+                item.innerHTML = `<div>#${j.sn} <b>${j.name}</b></div><div>${j.cycle/1000}s</div>`;
+                item.onclick = () => { selectedIndex = junctions.indexOf(j); render(); startPredict(); };
+                list.appendChild(item);
             });
-            selectedIndex = junctions.length - 1;
-            speak("已建立新路口");
-        } else {
-            selectedIndex = matchIdx;
-            const j = junctions[selectedIndex];
-            j.lastSync = syncTime;
-            j.lastSyncType = type;
-            j.logs.push({type, time: syncTime});
-            if(j.logs.length > 30) j.logs.shift();
-            analyzeSamples(selectedIndex);
-            speak("已採集樣本");
+            if (selectedIndex !== -1) document.getElementById('display-name').innerText = junctions[selectedIndex].name;
         }
-        saveData(); renderHistory(); startPredict();
-    }
 
-    function analyzeSamples(idx) {
-        const j = junctions[idx]; if (j.logs.length < 2) return;
-        for (let i = j.logs.length - 1; i >= 1; i--) {
-            for (let k = i - 1; k >= 0; k--) {
-                if (j.logs[i].type === j.logs[k].type) {
-                    const diff = j.logs[i].time - j.logs[k].time;
-                    if (diff >= 20000 && diff <= 300000) { j.calculatedCycle = Math.round(diff/1000)*1000; return; }
+        function importData(input) {
+            const r = new FileReader();
+            r.onload = e => {
+                const d = JSON.parse(e.target.result);
+                junctions = d.records || d;
+                save(); location.reload();
+            };
+            r.readAsText(input.files[0]);
+        }
+
+        function saveToFile() {
+            const blob = new Blob([JSON.stringify({records: junctions})], { type: "application/json" });
+            const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+            a.download = `traffic_lite.json`; a.click();
+        }
+
+        let lMap = null;
+        function toggleMap() {
+            const el = document.getElementById('map-overlay');
+            if (el.style.display !== 'block') {
+                el.style.display = 'block';
+                if (!lMap) {
+                    lMap = L.map('map').setView([userPos.lat, userPos.lon], 16);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(lMap);
                 }
-            }
+                lMap.invalidateSize();
+            } else el.style.display = 'none';
         }
-    }
 
-    function startPredict() {
-        if (predictTimer) clearInterval(predictTimer);
-        predictTimer = setInterval(() => {
-            if (selectedIndex === -1) return;
-            const j = junctions[selectedIndex];
-            const cycle = j.manualCycle || j.calculatedCycle || 60000;
-            if(!j.lastSync) return;
-
-            const now = Date.now();
-            const elapsed = (now - j.lastSync) % cycle;
-            const remain = Math.ceil((cycle - elapsed) / 1000);
-            const isFirst = elapsed < (cycle / 2);
-            const curType = isFirst ? j.lastSyncType : (j.lastSyncType === 'red' ? 'green' : 'red');
-            
-            document.getElementById('countdown').innerText = remain;
-            document.getElementById('countdown').style.color = (curType === 'red' ? "var(--red)" : "var(--green)");
-            document.getElementById('countdown-label').innerText = (curType === 'red' ? "🔴 紅燈" : "🟢 綠燈") + "預測中";
-
-            if (remain <= 10) {
-                document.getElementById('main-card').classList.add('flashing');
-                if (remain === 10) speak("剩十秒");
-            } else document.getElementById('main-card').classList.remove('flashing');
-        }, 1000);
-    }
-
-    // --- 定位修復 ---
-    function initGPS() {
-        if (!navigator.geolocation) { log("無 GPS 功能"); return; }
-        navigator.geolocation.watchPosition((pos) => {
-            userPos.lat = pos.coords.latitude; userPos.lon = pos.coords.longitude;
-            log(`定位: ${userPos.lat.toFixed(4)}, ${userPos.lon.toFixed(4)}`);
-            autoDetect();
-            if(leafletMap && userMarker) userMarker.setLatLng([userPos.lat, userPos.lon]);
-        }, (err) => { log("GPS 訊號弱..."); }, { enableHighAccuracy: true, timeout: 5000 });
-    }
-
-    function toggleMap() {
-        const overlay = document.getElementById('map-overlay');
-        if (overlay.style.display !== 'flex') {
-            overlay.style.display = 'flex';
-            speak("啟動地圖");
-            setTimeout(() => {
-                if (!leafletMap) {
-                    leafletMap = L.map('map').setView([userPos.lat, userPos.lon], 16);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(leafletMap);
-                    userMarker = L.circleMarker([userPos.lat, userPos.lon], { color: 'var(--blue)', radius: 10, fillOpacity: 1 }).addTo(leafletMap).bindPopup("你的位置");
-                } else {
-                    leafletMap.setView([userPos.lat, userPos.lon], 16);
-                }
-                leafletMap.invalidateSize();
-                renderMarkers();
-            }, 300);
-        } else overlay.style.display = 'none';
-    }
-
-    function renderMarkers() {
-        if(!leafletMap) return;
-        mapMarkers.forEach(m => leafletMap.removeLayer(m));
-        mapMarkers = [];
-        junctions.forEach(j => mapMarkers.push(L.marker([j.lat, j.lon]).addTo(leafletMap).bindPopup(j.name)));
-    }
-
-    function autoDetect() {
-        let nIdx = -1; let minD = 999;
-        junctions.forEach((j, i) => {
-            const d = calcDist(userPos.lat, userPos.lon, j.lat, j.lon);
-            const aDiff = Math.abs(j.heading - currentHeading);
-            if (d < (config.radius + 30) && (aDiff < 60 || aDiff > 300)) { nIdx = i; minD = d; }
-        });
-        if (nIdx !== -1) {
-            if (selectedIndex !== nIdx) { selectedIndex = nIdx; speak("接近 " + junctions[selectedIndex].name); renderHistory(); startPredict(); }
-        } else if (selectedIndex !== -1 && minD > (config.radius + 80)) {
-            selectedIndex = -1; renderHistory(); if(predictTimer) clearInterval(predictTimer);
+        function doVoice(m) {
+            const Rec = window.webkitSpeechRecognition || window.SpeechRecognition;
+            if(!Rec) return; let r = new Rec(); r.lang = 'zh-TW';
+            r.onresult = e => {
+                const res = e.results[0][0].transcript;
+                if(m === 'name') junctions[selectedIndex].name = res;
+                else { const n = res.match(/\d+/); if(n) junctions[selectedIndex].cycle = n[0]*1000; }
+                save(); render();
+            };
+            r.start();
         }
-    }
 
-    function calcDist(la1, lo1, la2, lo2) {
-        const R = 6371e3; const dLa = (la2-la1)*Math.PI/180, dLo = (lo2-lo1)*Math.PI/180;
-        const a = Math.sin(dLa/2)**2 + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    }
+        function manualRename() { if(selectedIndex===-1) return; const n = prompt("改名:", junctions[selectedIndex].name); if(n) { junctions[selectedIndex].name=n; save(); render(); } }
+        function gpsFix() { if(selectedIndex!==-1){ junctions[selectedIndex].lat=userPos.lat; junctions[selectedIndex].lon=userPos.lon; save(); speak("定位更新"); } }
+        function deleteJ() { if(selectedIndex!==-1 && confirm("刪除？")){ junctions.splice(selectedIndex,1); selectedIndex=-1; save(); location.reload(); } }
 
-    function initCompass() { window.addEventListener('deviceorientationabsolute', (e) => { currentHeading = e.webkitCompassHeading || (360 - e.alpha); }, true); }
-    function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(junctions)); }
-    function manualRename() { if(selectedIndex===-1) return; const n = prompt("修改路口名稱:", junctions[selectedIndex].name); if(n){ junctions[selectedIndex].name=n; saveData(); renderHistory(); } }
-    function gpsBtn() { if(selectedIndex!==-1){ junctions[selectedIndex].lat=userPos.lat; junctions[selectedIndex].lon=userPos.lon; speak("定位更新"); saveData(); renderHistory(); } }
-    function deleteBtn() { if(selectedIndex!==-1 && confirm("刪除？")){ junctions.splice(selectedIndex,1); selectedIndex=-1; saveData(); location.reload(); } }
-    function saveToFile() { const blob = new Blob([JSON.stringify({records: junctions, config})], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `traffic_backup.json`; a.click(); speak("檔案導出"); }
-    function triggerFileInput() { document.getElementById('fileIn').click(); }
-    function toggleSettings() { const el = document.getElementById('settings-overlay'); el.style.display = (el.style.display==='flex')?'none':'flex'; if(el.style.display==='flex') document.getElementById('cfg-offset').value=config.offset; }
-    function saveConfig() { config.offset = parseFloat(document.getElementById('cfg-offset').value); localStorage.setItem('TRAFFIC_CFG', JSON.stringify(config)); speak("已儲存"); toggleSettings(); }
-    function testAudio() { speak("語音測試正常"); }
-
-    function renderHistory() {
-        const list = document.getElementById('history-list'); list.innerHTML = '';
-        junctions.slice().reverse().forEach((j) => {
-            const idx = junctions.indexOf(j);
-            const item = document.createElement('div');
-            item.className = `history-item ${selectedIndex === idx ? 'selected' : ''}`;
-            item.onclick = () => { selectedIndex = idx; speak(j.name); renderHistory(); startPredict(); };
-            const cyc = (j.manualCycle || j.calculatedCycle || 60000)/1000;
-            item.innerHTML = `<div>#${j.sn} <b>${j.name}</b></div><div>${cyc}s</div>`;
-            list.appendChild(item);
-        });
-        if (selectedIndex !== -1) document.getElementById('display-name').innerText = junctions[selectedIndex].name;
-    }
-
-    const Recog = window.webkitSpeechRecognition || window.SpeechRecognition;
-    let recog = Recog ? new Recog() : null;
-    let speechMode = '';
-    if(recog) {
-        recog.lang = 'zh-TW';
-        recog.onresult = (e) => {
-            const res = e.results[0][0].transcript.trim();
-            if (speechMode === 'rename' && selectedIndex !== -1) { junctions[selectedIndex].name = res; speak("名稱已更換"); }
-            else if (speechMode === 'cycle' && selectedIndex !== -1) { const n = res.match(/\d+/); if(n) { junctions[selectedIndex].manualCycle = parseInt(n[0])*1000; speak("週期設定完成"); } }
-            saveData(); renderHistory();
-        };
-        recog.onend = () => document.getElementById('btn-cycle').classList.remove('mic-active');
-    }
-    function startSpeech(mode) { speechMode = mode; speak(mode === 'rename' ? "請說路名" : "請說秒數"); setTimeout(() => recog.start(), 1000); }
-
-    const cycleBtn = document.getElementById('btn-cycle');
-    let pressTimer;
-    cycleBtn.addEventListener('touchstart', () => { pressTimer = window.setTimeout(() => {
-        if(selectedIndex===-1) return;
-        const input = prompt("手動循環秒數:", (junctions[selectedIndex].manualCycle || junctions[selectedIndex].calculatedCycle || 60000) / 1000);
-        if(input) { junctions[selectedIndex].manualCycle = parseInt(input) * 1000; saveData(); renderHistory(); startPredict(); }
-        pressTimer = null;
-    }, 600); });
-    cycleBtn.addEventListener('touchend', () => { if(pressTimer) { clearTimeout(pressTimer); startSpeech('cycle'); } });
-
-    window.onload = () => {
-        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW',{hour12:false}); }, 1000);
-        renderHistory();
-    };
-</script>
+        window.onload = () => { setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW',{hour12:false}); }, 1000); render(); };
+    </script>
 </body>
 </html>
