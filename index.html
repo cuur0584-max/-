@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Traffic Pro V67</title>
+    <title>Traffic Pro V68 - 地圖編輯版</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -11,7 +11,6 @@
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { background: var(--bg); color: #fff; margin: 0; padding: 0; height: 100dvh; display: flex; flex-direction: column; font-family: system-ui, sans-serif; overflow: hidden; }
         
-        /* 3. 版本顯示列 */
         .version-bar { height: 20px; background: #222; color: var(--blue); font-size: 0.6rem; display: flex; justify-content: center; align-items: center; letter-spacing: 1px; }
 
         .header { height: 8%; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 1px solid #333; }
@@ -20,17 +19,15 @@
 
         .active-card { height: 26%; display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 8px; background: var(--card); border-radius: 20px; border: 2px solid #333; position: relative; }
         .flashing { animation: pulse 1s infinite; border-color: var(--yellow); }
-        @keyframes pulse { 0%, 100% { background: #111; } 50% { background: #320; } }
+        @keyframes pulse { 0%, 100% { background: #111; } 50% { background: #332200; } }
         
         #display-name { font-size: 1.6rem; font-weight: 900; color: var(--yellow); text-decoration: underline; }
         #countdown { font-size: 4.5rem; font-weight: 900; color: #fff; font-family: monospace; line-height: 1; }
         #next-change { font-size: 0.8rem; color: #666; margin-top: 5px; }
 
-        /* 歷史清單 */
         #history-list { flex: 1; overflow-y: auto; background: #080808; border-radius: 15px; margin: 0 8px 8px 8px; border: 1px solid #222; }
         .history-item { padding: 12px 15px; border-bottom: 1px solid #1a1a1a; display: flex; justify-content: space-between; font-size: 0.85rem; }
         .selected { background: #1a1a00; border-left: 4px solid var(--yellow); }
-        .h-info { display: flex; flex-direction: column; }
         .h-sn { color: #555; font-size: 0.7rem; margin-right: 5px; }
 
         .sys-panel { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 0 8px; margin-bottom: 8px; }
@@ -43,12 +40,15 @@
         .btn-side { width: 60px; height: 60px; background: #222; border: 1px solid #444; font-size: 0.65rem; }
 
         #map-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 9999; display: none; flex-direction: column; }
+        #map { flex: 1; width: 100%; }
+
+        /* Leaflet 彈窗按鈕樣式 */
+        .map-edit-btn { background: var(--blue); color: white; border: none; padding: 5px 10px; border-radius: 5px; margin-top: 5px; cursor: pointer; font-size: 0.8rem; }
     </style>
 </head>
 <body onclick="unlock()">
 
-    <!-- 3. 版本顯示列 -->
-    <div class="version-bar">TRAFFIC PRO V67 - 終極穩定導航版</div>
+    <div class="version-bar">TRAFFIC PRO V68 - 地圖點位編輯版</div>
 
     <div class="header">
         <div id="clock">00:00:00</div>
@@ -61,16 +61,15 @@
         <div id="next-change">請按紅/綠燈紀錄樣本</div>
     </div>
 
-    <!-- 4. 路口清單 -->
     <div id="history-list"></div>
 
     <div class="sys-panel">
         <button class="sys-btn" onclick="speakBtn('地圖'); toggleMap()">🗺地圖</button>
         <button class="sys-btn" onclick="speakBtn('存檔'); saveToFile()">💾存檔</button>
         <button class="sys-btn" onclick="speakBtn('讀取'); document.getElementById('fIn').click()">📂讀取</button>
-        <button class="sys-btn" onclick="speak('音效測試正常')">🔊測試</button>
+        <button class="sys-btn" onclick="speak('測試正常')">🔊測試</button>
         <button class="sys-btn" style="color:var(--red)" onclick="speakBtn('刪除'); deleteJ()">🗑刪除</button>
-        <input type="file" id="fIn" style="display:none" onchange="importData(this)" accept=".json">
+        <input type="file" id="fileIn" style="display:none" onchange="importData(this)" accept=".json">
     </div>
 
     <div class="footer">
@@ -94,7 +93,7 @@
     <audio id="silent-audio" loop src="https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3"></audio>
 
     <script>
-        const DB_KEY = 'TRAFFIC_PRO_V67_DB';
+        const DB_KEY = 'TRAFFIC_PRO_V68_DB';
         let junctions = JSON.parse(localStorage.getItem(DB_KEY)) || [];
         let globalCounter = junctions.length > 0 ? Math.max(...junctions.map(j => j.sn || 0)) + 1 : 1;
         let userPos = { lat: 23.6, lon: 120.9 }, selectedIndex = -1, predictTimer = null;
@@ -117,21 +116,60 @@
             }
         }
 
-        // --- 1 & 2. 核心紀錄與地圖顯示 ---
+        // --- 地圖互動改名核心功能 ---
+        window.editNameFromMap = function(idx) {
+            const oldName = junctions[idx].name;
+            const newName = prompt("修改路口名稱:", oldName);
+            if (newName && newName.trim() !== "") {
+                junctions[idx].name = newName.trim();
+                save();
+                render();
+                renderMarkers(); // 重新整理地圖上的氣泡
+                speak("名稱已更新");
+            }
+        };
+
+        function renderMarkers() {
+            if (!markerGroup) return;
+            markerGroup.clearLayers();
+            junctions.forEach((j, i) => {
+                const marker = L.marker([j.lat, j.lon]).addTo(markerGroup);
+                // 建立包含修改按鈕的 HTML 氣泡
+                const popupHTML = `
+                    <div style="color:black; font-family: sans-serif;">
+                        <b>${j.name}</b><br>
+                        SN: ${j.sn}<br>
+                        週期: ${j.cycle/1000}s<br>
+                        <button class="map-edit-btn" onclick="editNameFromMap(${i})">✎ 修改名稱</button>
+                    </div>
+                `;
+                marker.bindPopup(popupHTML);
+            });
+        }
+
+        function toggleMap() {
+            const el = document.getElementById('map-overlay');
+            if (el.style.display !== 'flex') {
+                el.style.display = 'flex';
+                if (!lMap) {
+                    lMap = L.map('map').setView([userPos.lat, userPos.lon], 16);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(lMap);
+                    markerGroup = L.layerGroup().addTo(lMap);
+                    userMarker = L.circleMarker([userPos.lat, userPos.lon], {color: 'var(--blue)', radius: 10, fillOpacity: 0.8}).addTo(lMap);
+                }
+                lMap.invalidateSize();
+                renderMarkers();
+            } else el.style.display = 'none';
+        }
+
+        // --- 核心邏輯 ---
         function logLight(type) {
-            const now = Date.now() - 1000; // 扣除延遲
+            const now = Date.now() - 1000;
             let match = junctions.findIndex(j => calcDist(userPos.lat, userPos.lon, j.lat, j.lon) < 50);
-            
             if (match === -1) {
-                // 新增路口定位點
-                junctions.push({ 
-                    sn: globalCounter++, name: "新路口", 
-                    lat: userPos.lat, lon: userPos.lon, 
-                    cycle: 60000, last: now, lastType: type, 
-                    logs: [{type, time: now}] 
-                });
+                junctions.push({ sn: globalCounter++, name: "新路口", lat: userPos.lat, lon: userPos.lon, cycle: 60000, last: now, lastType: type, logs: [{type, time: now}] });
                 selectedIndex = junctions.length - 1;
-                speak("已建立新路口");
+                speak("建立新路口");
             } else {
                 selectedIndex = match;
                 junctions[match].last = now;
@@ -142,7 +180,6 @@
                 speak("已採樣" + junctions[match].name);
             }
             save(); render(); startPredict();
-            // 如果地圖開著，立即更新圖釘
             if (lMap) renderMarkers();
         }
 
@@ -167,11 +204,9 @@
                 const rem = Math.ceil((j.cycle - elapsed) / 1000);
                 const isFirst = elapsed < (j.cycle / 2);
                 const curColor = isFirst ? j.lastType : (j.lastType === 'red' ? 'green' : 'red');
-                
                 document.getElementById('countdown').innerText = rem;
                 document.getElementById('countdown').style.color = (curColor === 'red' ? "var(--red)" : "var(--green)");
                 document.getElementById('next-change').innerText = `預計 ${new Date(Date.now() + (j.cycle - elapsed)).toLocaleTimeString()} 轉燈`;
-
                 if (rem <= 10) {
                     document.getElementById('main-card').classList.add('flashing');
                     if (rem === 10) speak("剩十秒");
@@ -206,84 +241,38 @@
         }
 
         function save() { localStorage.setItem(DB_KEY, JSON.stringify(junctions)); }
-
-        // --- 4. 列表點擊顯示全部記錄 ---
         function render() {
             const list = document.getElementById('history-list'); list.innerHTML = '';
             junctions.slice().reverse().forEach(j => {
                 const realIdx = junctions.indexOf(j);
                 const item = document.createElement('div');
                 item.className = `history-item ${realIdx === selectedIndex ? 'selected' : ''}`;
-                // 點擊列表顯示詳情
-                item.onclick = () => showJunctionDetails(realIdx);
+                item.onclick = () => { selectedIndex = realIdx; render(); startPredict(); speak(j.name); };
                 item.innerHTML = `<div><span class="h-sn">#${j.sn}</span><b>${j.name}</b></div><div style="color:var(--green)">${j.cycle/1000}s</div>`;
                 list.appendChild(item);
             });
             if (selectedIndex !== -1) document.getElementById('display-name').innerText = junctions[selectedIndex].name;
         }
 
-        function showJunctionDetails(idx) {
-            selectedIndex = idx;
-            const j = junctions[idx];
-            render(); 
-            startPredict();
-            
-            // 彈出視窗顯示歷史紀錄
-            let historyStr = `路口: ${j.name} (SN:${j.sn})\n週期: ${j.cycle/1000}s\n--- 採樣日誌 ---\n`;
-            j.logs.forEach((l, i) => {
-                const time = new Date(l.time).toLocaleTimeString();
-                historyStr += `${i+1}. ${l.type === 'red' ? '🔴 紅燈' : '🟢 綠燈'} - ${time}\n`;
-            });
-            alert(historyStr);
-            speak("選取" + j.name);
-        }
-
-        // --- 1. 備份讀取與地圖修復 ---
         function importData(input) {
             const r = new FileReader();
             r.onload = e => {
                 try {
                     const d = JSON.parse(e.target.result);
                     junctions = d.records || d;
-                    // 重新校準計數器
                     globalCounter = Math.max(...junctions.map(j => j.sn || 0)) + 1;
-                    save(); 
-                    speak("匯入成功");
-                    render();
-                    if (lMap) renderMarkers(); // 匯入後立即更新地圖圖釘
+                    save(); speak("匯入成功"); render();
+                    if (lMap) renderMarkers();
                     setTimeout(() => location.reload(), 1000);
                 } catch(e) { alert("讀取失敗"); }
             };
             r.readAsText(input.files[0]);
         }
 
-        function toggleMap() {
-            const el = document.getElementById('map-overlay');
-            if (el.style.display !== 'flex') {
-                el.style.display = 'flex';
-                if (!lMap) {
-                    lMap = L.map('map').setView([userPos.lat, userPos.lon], 16);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(lMap);
-                    markerGroup = L.layerGroup().addTo(lMap);
-                    userMarker = L.circleMarker([userPos.lat, userPos.lon], {color: 'var(--blue)', radius: 10}).addTo(lMap);
-                }
-                lMap.invalidateSize();
-                renderMarkers(); // 打開地圖時確保圖釘都在
-            } else el.style.display = 'none';
-        }
-
-        function renderMarkers() {
-            if (!markerGroup) return;
-            markerGroup.clearLayers();
-            junctions.forEach(j => {
-                L.marker([j.lat, j.lon]).addTo(markerGroup).bindPopup(`<b>${j.name}</b><br>SN:${j.sn}`);
-            });
-        }
-
         function saveToFile() {
             const blob = new Blob([JSON.stringify({records: junctions})], { type: "application/json" });
             const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-            a.download = `traffic_v67.json`; a.click();
+            a.download = `traffic_v68.json`; a.click();
         }
 
         function doVoice(m) {
@@ -299,7 +288,7 @@
         }
 
         function manualRename() { if(selectedIndex===-1) return; const n = prompt("改名:", junctions[selectedIndex].name); if(n) { junctions[selectedIndex].name=n; save(); render(); if(lMap) renderMarkers(); } }
-        function gpsFix() { if(selectedIndex!==-1){ junctions[selectedIndex].lat=userPos.lat; junctions[selectedIndex].lon=userPos.lon; save(); speak("定位已校正"); if(lMap) renderMarkers(); } }
+        function gpsFix() { if(selectedIndex!==-1){ junctions[selectedIndex].lat=userPos.lat; junctions[selectedIndex].lon=userPos.lon; save(); speak("定位更新"); if(lMap) renderMarkers(); } }
         function deleteJ() { if(selectedIndex!==-1 && confirm("刪除此路口？")){ junctions.splice(selectedIndex,1); selectedIndex=-1; save(); location.reload(); } }
 
         window.onload = () => { setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW',{hour12:false}); }, 1000); render(); };
